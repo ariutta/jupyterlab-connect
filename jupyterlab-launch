@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+
+OUTPUT_FILE=$(mktemp) || exit 1
+SERVER_START_CMD="jupyter lab --no-browser --port=8889"
+
+HELP_MSG="jupyterlab-launch <target>
+    When server is local, target defaults to pwd.
+    When server is remote, an ssh-style url is required, e.g.:
+      jupyterlab-launch nixos.gladstone.internal:code/jupyterlab-demo"
+
+server_pid=""
+tunnel_pid="" 
+# Based on http://linuxcommand.org/lc3_wss0140.php
+# and https://codeinthehole.com/tips/bash-error-reporting/
+PROGNAME=$(basename "$0")
+
+cleanup_complete=0
+
+cleanup() {
+  if [[ -f "$OUTPUT_FILE" ]]; then
+    rm "$OUTPUT_FILE"
+  fi
+  # TODO: should we delete the nohup.out file created when server is remote?
+  # (it's a different file from $OUTPUT_FILE)
+
+  # stopping the server and tunnel processes, if running
+  if [[ -n "$server_pid" ]] && [[ -n "$(ps -p $server_pid | grep $server_pid)" ]]; then
+    kill -9 "$server_pid"
+  fi
+  if [[ -n "$tunnel_pid" ]] && [[ -n "$(ps -p $tunnel_pid | grep $tunnel_pid)" ]]; then
+    kill -9 "$tunnel_pid"
+  fi
+  if [[ -n "$db_tunnel_pid" ]] && [[ -n "$(ps -p $db_tunnel_pid | grep $db_tunnel_pid)" ]]; then
+    kill -9 "$db_tunnel_pid"
+  fi
+
+  cleanup_complete=1
+
+  echo "$PROGNAME: goodbye"
+}
+
+error_exit() {
+#	----------------------------------------------------------------
+#	Function for exit due to fatal program error
+#		Accepts 1 argument:
+#			string containing descriptive error message
+#	----------------------------------------------------------------
+
+  read -r line file <<<"$(caller)"
+  echo "" 1>&2
+  echo "ERROR: file $file, line $line" 1>&2
+  if [ ! "$1" ]; then
+    sed "${line}q;d" "$file" 1>&2
+  else
+    echo "${1:-"Unknown Error"}" 1>&2
+  fi
+  echo "" 1>&2
+
+  # TODO: should error_exit call cleanup?
+  #       The EXIT trap already calls cleanup, so
+  #       calling it here means calling it twice.
+  if [ ! $cleanup_complete ]; then
+    cleanup
+  fi
+  exit 1
+}
+
+get_server_url() {
+  attempt_iteration=${1:-1}
+  ATTEMPT_LIMIT=5
+  WAIT_SEC=3
+
+  echo "Waiting for server to start (Attempt $attempt_iteration/$ATTEMPT_LIMIT)..." 1>&2
+  sleep $WAIT_SEC
+  cat "$OUTPUT_FILE" 1>&2
+
+  url="$(perl -ne "print if s/(^|.*?[ \"])(http.*?)([\" >].*|$)/\$2/" "$OUTPUT_FILE" | head -n 1)"
+  if [[ -z "$url" ]]; then
+    if [[ $attempt_iteration -eq $ATTEMPT_LIMIT ]]; then
+      error_exit "No server URL found"
+    else
+      next_attempt_iteration=$(echo "$attempt_iteration + 1" | bc)
+      get_server_url $next_attempt_iteration
+    fi
+  else
+    echo "$url"
+  fi
+}
+
+trap error_exit ERR
+trap cleanup EXIT INT QUIT TERM
+
+if [[ "$1" == '-h' ]] || [[ "$1" == '--help' ]]; then
+  echo "$HELP_MSG"
+  exit 0
+fi
+
+# if input has a colon, assume it's a remote target
+if [[ "$1" == *":"* ]]; then
+  JUPYTER_SERVER_ADDRESS="${1%:*}"
+  TARGET_DIR="${1##*:}"
+else
+  TARGET_DIR="$1"
+fi
+
+DB_SERVER_ADDRESS="wikipathways-workspace.gladstone.internal"
+
+TARGET_DIR=${TARGET_DIR:-'./'}
+
+if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
+  if jupyter-lab --version > /dev/null 2>&1; then
+    echo "Launching locally..."
+    INITIAL_DIR="$(pwd)"
+    cd "$TARGET_DIR" || error_exit "Could not change to $TARGET_DIR"
+    nohup $SERVER_START_CMD > "$OUTPUT_FILE" &
+    server_pid=$!
+    cd "$INITIAL_DIR" || error_exit "Could not return to $INITIAL_DIR"
+  else
+    error_exit "$HELP_MSG"
+  fi
+else
+  SERVER_IS_REMOTE=1
+  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && nix-shell --command \"$SERVER_START_CMD\" || exit 1" > "$OUTPUT_FILE" &
+  server_pid=$!
+  sleep 3
+fi
+
+url=$(get_server_url)
+port="$(echo "$url" | sed -E 's/.*:([0-9]{4}).*/\1/')"
+if [[ -z "$port" ]]; then
+  error_exit "No port found"
+fi
+
+if [ $SERVER_IS_REMOTE ]; then
+  echo "Starting tunnel..."
+  nohup ssh -N -L $port:localhost:$port "$JUPYTER_SERVER_ADDRESS" > /dev/null &
+  tunnel_pid=$!
+  sleep 3
+fi
+
+if xdg-open --version > /dev/null 2>&1; then
+  xdg-open "$url"
+elif which open > /dev/null 2>&1; then
+  open "$url"
+else
+  echo "Warning: Not sure how to open browser."
+  echo "Here's the server output:"
+  cat "$OUTPUT_FILE"
+fi
+
+## TODO: if there's a password prompt, the following code will miss it.
+## TODO: get the db tunnel working. The following code doesn't work (at least for a local jupyter server):
+#echo "Starting db tunnel..."
+## access via URI like postgres://localhost:3333/pfocr_plus
+#if [ $SERVER_IS_REMOTE ]; then
+#  echo "TODO: look into how to create db tunnel"
+#  # maybe it's something like this?
+#  nohup ssh -N -L 3333:"$JUPYTER_SERVER_ADDRESS":5432 "$DB_SERVER_ADDRESS" > /dev/null &
+#else
+#  nohup ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS" > /dev/null &
+#fi
+#
+# I'd like to do this the same way as I connect to a remote jupyter server,
+# but that isn't working.
+echo "Ctrl-d to close db tunnel"
+if [ $SERVER_IS_REMOTE ]; then
+  ssh "$JUPYTER_SERVER_ADDRESS" -t "ssh -N -L 3333:localhost:5432 \"$DB_SERVER_ADDRESS\""
+else
+  ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS"
+fi
+#db_tunnel_pid=$!
+
+echo ""
+read -rp "To quit, hit Enter"
