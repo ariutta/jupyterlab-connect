@@ -120,7 +120,7 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   fi
 else
   SERVER_IS_REMOTE=1
-  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && nix-shell --command \"$SERVER_START_CMD\" || exit 1" > "$OUTPUT_FILE" &
+  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $SERVER_START_CMD || exit 1" > "$OUTPUT_FILE" &
   server_pid=$!
   sleep 3
 fi
