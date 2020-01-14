@@ -141,8 +141,10 @@ if [ $SERVER_IS_REMOTE ]; then
 fi
 
 if xdg-open --version > /dev/null 2>&1; then
+  # NixOS
   xdg-open "$url"
 elif which open > /dev/null 2>&1; then
+  # macOS
   open "$url"
 else
   echo "Warning: Not sure how to open browser."
@@ -150,8 +152,21 @@ else
   cat "$OUTPUT_FILE"
 fi
 
-## TODO: if there's a password prompt, the following code will miss it.
-## TODO: get the db tunnel working. The following code doesn't work (at least for a local jupyter server):
+## NOTE: disabled for now. DB and jupyter are currently on the same machine.
+## Maybe specifying a db server address should be a command line option?
+
+## TODO: the following works, but I'd like to do this the same way as I connect
+## to a remote jupyter server. However, that isn't working. It seems I need to
+## leave the ssh session "live" and use ctrl-d to exit when I'm done.
+#echo "Ctrl-d to close db tunnel"
+#if [ $SERVER_IS_REMOTE ]; then
+#  ssh "$JUPYTER_SERVER_ADDRESS" -t "ssh -N -L 3333:localhost:5432 \"$DB_SERVER_ADDRESS\""
+#else
+#  ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS"
+#fi
+
+## TODO: The following code doesn't work (at least for a local jupyter server):
+## I want to get the db tunnel working the same way as the jupyter tunnel.
 #echo "Starting db tunnel..."
 ## access via URI like postgres://localhost:3333/pfocr_plus
 #if [ $SERVER_IS_REMOTE ]; then
@@ -161,16 +176,8 @@ fi
 #else
 #  nohup ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS" > /dev/null &
 #fi
-#
-# I'd like to do this the same way as I connect to a remote jupyter server,
-# but that isn't working.
-echo "Ctrl-d to close db tunnel"
-if [ $SERVER_IS_REMOTE ]; then
-  ssh "$JUPYTER_SERVER_ADDRESS" -t "ssh -N -L 3333:localhost:5432 \"$DB_SERVER_ADDRESS\""
-else
-  ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS"
-fi
 #db_tunnel_pid=$!
+## TODO: if there's a password prompt, the code above will miss it.
 
 echo ""
 read -rp "To quit, hit Enter"
