@@ -9,7 +9,7 @@ HELP_MSG="jupyterlab-launch <target>
       jupyterlab-launch nixos.gladstone.internal:code/jupyterlab-demo"
 
 server_pid=""
-tunnel_pid="" 
+jupyter_tunnel_pid="" 
 # Based on http://linuxcommand.org/lc3_wss0140.php
 # and https://codeinthehole.com/tips/bash-error-reporting/
 PROGNAME=$(basename "$0")
@@ -27,8 +27,8 @@ cleanup() {
   if [[ -n "$server_pid" ]] && [[ -n "$(ps -p $server_pid | grep $server_pid)" ]]; then
     kill -9 "$server_pid"
   fi
-  if [[ -n "$tunnel_pid" ]] && [[ -n "$(ps -p $tunnel_pid | grep $tunnel_pid)" ]]; then
-    kill -9 "$tunnel_pid"
+  if [[ -n "$jupyter_tunnel_pid" ]] && [[ -n "$(ps -p $jupyter_tunnel_pid | grep $jupyter_tunnel_pid)" ]]; then
+    kill -9 "$jupyter_tunnel_pid"
   fi
   if [[ -n "$db_tunnel_pid" ]] && [[ -n "$(ps -p $db_tunnel_pid | grep $db_tunnel_pid)" ]]; then
     kill -9 "$db_tunnel_pid"
@@ -125,6 +125,8 @@ else
   sleep 3
 fi
 
+MINIMUM_JUPYTER_SERVER_LOAD_TIME=3
+sleep $MINIMUM_JUPYTER_SERVER_LOAD_TIME
 url=$(get_server_url)
 port="$(echo "$url" | sed -E 's/.*:([0-9]{4}).*/\1/')"
 if [[ -z "$port" ]]; then
@@ -134,7 +136,7 @@ fi
 if [ $SERVER_IS_REMOTE ]; then
   echo "Starting tunnel..."
   nohup ssh -N -L $port:localhost:$port "$JUPYTER_SERVER_ADDRESS" > /dev/null &
-  tunnel_pid=$!
+  jupyter_tunnel_pid=$!
   sleep 3
 fi
 
