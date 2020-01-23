@@ -24,13 +24,13 @@ cleanup() {
   # (it's a different file from $OUTPUT_FILE)
 
   # stopping the server and tunnel processes, if running
-  if [[ -n "$server_pid" ]] && [[ -n "$(ps -p $server_pid | grep $server_pid)" ]]; then
+  if [[ -n "$server_pid" ]] && [[ -n "$(ps -p $server_pid -o pid=)" ]]; then
     kill -9 "$server_pid"
   fi
-  if [[ -n "$jupyter_tunnel_pid" ]] && [[ -n "$(ps -p $jupyter_tunnel_pid | grep $jupyter_tunnel_pid)" ]]; then
+  if [[ -n "$jupyter_tunnel_pid" ]] && [[ -n "$(ps -p $jupyter_tunnel_pid -o pid=)" ]]; then
     kill -9 "$jupyter_tunnel_pid"
   fi
-  if [[ -n "$db_tunnel_pid" ]] && [[ -n "$(ps -p $db_tunnel_pid | grep $db_tunnel_pid)" ]]; then
+  if [[ -n "$db_tunnel_pid" ]] && [[ -n "$(ps -p $db_tunnel_pid -o pid=)" ]]; then
     kill -9 "$db_tunnel_pid"
   fi
 
@@ -108,11 +108,11 @@ DB_SERVER_ADDRESS="wikipathways-workspace.gladstone.internal"
 TARGET_DIR=${TARGET_DIR:-'./'}
 
 if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
-  if jupyter-lab --version > /dev/null 2>&1; then
+  if jupyter-lab --version >/dev/null 2>&1; then
     echo "Launching locally..."
     INITIAL_DIR="$(pwd)"
     cd "$TARGET_DIR" || error_exit "Could not change to $TARGET_DIR"
-    nohup $SERVER_START_CMD > "$OUTPUT_FILE" &
+    nohup $SERVER_START_CMD >"$OUTPUT_FILE" &
     server_pid=$!
     cd "$INITIAL_DIR" || error_exit "Could not return to $INITIAL_DIR"
   else
@@ -120,8 +120,11 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   fi
 else
   SERVER_IS_REMOTE=1
-  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $SERVER_START_CMD || exit 1" > "$OUTPUT_FILE" &
+  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $SERVER_START_CMD || exit 1" >"$OUTPUT_FILE" &
   server_pid=$!
+  if [[ -z "$(ps -p $server_pid -o pid=)" ]]; then
+    error_exit "Failed to launch jupyter on remote server"
+  fi
   sleep 3
 fi
 
@@ -135,15 +138,18 @@ fi
 
 if [ $SERVER_IS_REMOTE ]; then
   echo "Starting tunnel..."
-  nohup ssh -N -L $port:localhost:$port "$JUPYTER_SERVER_ADDRESS" > /dev/null &
+  nohup ssh -N -L $port:localhost:$port "$JUPYTER_SERVER_ADDRESS" >/dev/null &
   jupyter_tunnel_pid=$!
+  if [[ -z "$(ps -p $jupyter_tunnel_pid -o pid=)" ]]; then
+    error_exit "Failed to create tunnel to jupyter server (for HTTP)"
+  fi
   sleep 3
 fi
 
-if xdg-open --version > /dev/null 2>&1; then
+if xdg-open --version >/dev/null 2>&1; then
   # NixOS
   xdg-open "$url"
-elif which open > /dev/null 2>&1; then
+elif which open >/dev/null 2>&1; then
   # macOS
   open "$url"
 else
@@ -172,9 +178,9 @@ fi
 #if [ $SERVER_IS_REMOTE ]; then
 #  echo "TODO: look into how to create db tunnel"
 #  # maybe it's something like this?
-#  nohup ssh -N -L 3333:"$JUPYTER_SERVER_ADDRESS":5432 "$DB_SERVER_ADDRESS" > /dev/null &
+#  nohup ssh -N -L 3333:"$JUPYTER_SERVER_ADDRESS":5432 "$DB_SERVER_ADDRESS" >/dev/null &
 #else
-#  nohup ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS" > /dev/null &
+#  nohup ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS" >/dev/null &
 #fi
 #db_tunnel_pid=$!
 ## TODO: if there's a password prompt, the code above will miss it.
