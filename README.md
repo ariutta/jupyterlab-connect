@@ -1,2 +1,7 @@
 # jupyterlab-launch
-Launch jupyter lab
+Launch jupyter lab.
+
+## Help
+```
+./jupyterlab-launch --help
+```

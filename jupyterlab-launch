@@ -1,7 +1,31 @@
 #!/usr/bin/env bash
 
 OUTPUT_FILE=$(mktemp) || exit 1
-SERVER_START_CMD="jupyter lab --no-browser --port=8889"
+
+# limit memory available to the process, in order to avoid OOM errors that crash the system
+BASE_SERVER_START_CMD="jupyter lab --no-browser --port=8889"
+SERVER_START_CMD=$(cat <<EOF
+memory_free="\$(free -g | awk '/Mem:/ { print \$4 }')";
+jupyterlab_memory_limit="\$(echo "\$memory_free * 0.8" | bc)";
+if \$(systemd-run --version >/dev/null 2&>1); then
+  systemd-run --user --scope -p MemoryLimit=\$jupyterlab_memory_limit'G' $BASE_SERVER_START_CMD;
+else
+  $BASE_SERVER_START_CMD;
+fi
+EOF
+)
+
+# TODO
+# I haven't gotten the systemd-run option to work via direnv exec.
+# What if jupyterlab_memory_limit is too low or otherwise invalid?
+# What if jupyter is already running? Need to detect whether it's a duplicate.
+# Maybe these commands might be useful:
+#   jupyter notebook list --jsonlist
+#   jupyter notebook list --jsonlist | jq '.[].port'
+#   jupyter notebook list --jsonlist | jq '.[].pid'
+#   jupyter notebook list --jsonlist | jq '.[].notebook_dir'
+# to stop it for a specific port:
+#   jupyter notebook stop 8889
 
 HELP_MSG="jupyterlab-launch <target>
     When server is local, target defaults to pwd.
@@ -112,7 +136,7 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
     echo "Launching locally..."
     INITIAL_DIR="$(pwd)"
     cd "$TARGET_DIR" || error_exit "Could not change to $TARGET_DIR"
-    nohup $SERVER_START_CMD > "$OUTPUT_FILE" &
+    nohup sh -c "$SERVER_START_CMD" > "$OUTPUT_FILE" &
     server_pid=$!
     cd "$INITIAL_DIR" || error_exit "Could not return to $INITIAL_DIR"
   else
@@ -120,7 +144,13 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   fi
 else
   SERVER_IS_REMOTE=1
-  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $SERVER_START_CMD || exit 1" > "$OUTPUT_FILE" &
+  # TODO: only the line below worked:
+  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $BASE_SERVER_START_CMD || exit 1" > "$OUTPUT_FILE" &
+  # but none of the ones below worked:
+  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ \"$SERVER_START_CMD\" || exit 1" > "$OUTPUT_FILE" &
+  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $SERVER_START_CMD || exit 1" > "$OUTPUT_FILE" &
+  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ sh -c \"$SERVER_START_CMD\" || exit 1" > "$OUTPUT_FILE" &
+  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ sh -c $SERVER_START_CMD || exit 1" > "$OUTPUT_FILE" &
   server_pid=$!
   sleep 3
 fi
