@@ -3,10 +3,12 @@
 OUTPUT_FILE=$(mktemp) || exit 1
 
 # limit memory available to the process, in order to avoid OOM errors that crash the system
-BASE_SERVER_START_CMD="jupyter lab --no-browser --port=8889"
+port="8889"
+BASE_SERVER_START_CMD="jupyter lab --no-browser --port=$port"
 SERVER_START_CMD=$(cat <<EOF
 memory_free="\$(free -g | awk '/Mem:/ { print \$4 }')";
-jupyterlab_memory_limit="\$(echo "\$memory_free * 0.8" | bc)";
+memory_available="\$(free -g | awk '/Mem:/ { print \$7 }')";
+jupyterlab_memory_limit="\$(echo "(\$memory_free + \$memory_available) / 3" | bc)";
 if \$(systemd-run --version >/dev/null 2&>1); then
   systemd-run --user --scope -p MemoryLimit=\$jupyterlab_memory_limit'G' $BASE_SERVER_START_CMD;
 else
@@ -41,6 +43,20 @@ PROGNAME=$(basename "$0")
 cleanup_complete=0
 
 cleanup() {
+  #   jupyter notebook list --jsonlist | jq '.[].port'
+  #   jupyter notebook list --jsonlist | jq '.[].pid'
+  #   jupyter notebook list --jsonlist | jq '.[].notebook_dir'
+  # to stop it for a specific port:
+  #   jupyter notebook stop 8889
+  echo "server_pid: $server_pid"
+  if [ $SERVER_IS_REMOTE ]; then
+    ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ jupyter notebook list --jsonlist | jq . || exit 1"
+    ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ jupyter notebook stop $port || exit 1"
+  else
+    jupyter notebook list --jsonlist | jq .
+    jupyter notebook stop $port
+  fi
+
   if [[ -f "$OUTPUT_FILE" ]]; then
     rm "$OUTPUT_FILE"
   fi
@@ -49,6 +65,7 @@ cleanup() {
 
   # stopping the server and tunnel processes, if running
   if [[ -n "$server_pid" ]] && [[ -n "$(ps -p $server_pid -o pid=)" ]]; then
+    echo "killing server_pid $server_pid"
     kill -9 "$server_pid"
   fi
   if [[ -n "$jupyter_tunnel_pid" ]] && [[ -n "$(ps -p $jupyter_tunnel_pid -o pid=)" ]]; then
@@ -56,6 +73,12 @@ cleanup() {
   fi
   if [[ -n "$db_tunnel_pid" ]] && [[ -n "$(ps -p $db_tunnel_pid -o pid=)" ]]; then
     kill -9 "$db_tunnel_pid"
+  fi
+
+  if [ $SERVER_IS_REMOTE ]; then
+    ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ echo $server_pid || exit 1"
+  else
+    jupyter notebook list --jsonlist | jq .
   fi
 
   cleanup_complete=1
@@ -135,9 +158,10 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   if jupyter-lab --version >/dev/null 2>&1; then
     echo "Launching locally..."
     INITIAL_DIR="$(pwd)"
-    cd "$TARGET_DIR" || error_exit "Could not change to $TARGET_DIR"
+    cd "$TARGET_DIR" || error_exit "Could not change directory to $TARGET_DIR"
     nohup sh -c "$SERVER_START_CMD" >"$OUTPUT_FILE" &
     server_pid=$!
+    echo "server_pid: $server_pid"
     cd "$INITIAL_DIR" || error_exit "Could not return to $INITIAL_DIR"
   else
     error_exit "$HELP_MSG"
