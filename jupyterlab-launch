@@ -9,7 +9,7 @@ SERVER_START_CMD=$(cat <<EOF
 memory_free="\$(free -g | awk '/Mem:/ { print \$4 }')";
 memory_available="\$(free -g | awk '/Mem:/ { print \$7 }')";
 jupyterlab_memory_limit="\$(echo "(\$memory_free + \$memory_available) / 3" | bc)";
-if \$(systemd-run --version >/dev/null 2&>1); then
+if \$(systemd-run --version >/dev/null 2>&1); then
   systemd-run --user --scope -p MemoryLimit=\$jupyterlab_memory_limit'G' $BASE_SERVER_START_CMD;
 else
   $BASE_SERVER_START_CMD;
