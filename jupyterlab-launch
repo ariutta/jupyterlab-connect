@@ -1,12 +1,8 @@
 #!/usr/bin/env bash
 
-OUTPUT_FILE=$(mktemp) || exit 1
-port="8889"
-
-HELP_MSG="jupyterlab-launch <target>
-    When server is local, target defaults to pwd.
-    When server is remote, an ssh-style url is required, e.g.:
-      jupyterlab-launch nixos.gladstone.internal:code/jupyterlab-demo"
+# see https://stackoverflow.com/a/246128/5354298
+get_script_dir() { echo "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"; }
+SCRIPT_DIR=$(get_script_dir)
 
 # Based on http://linuxcommand.org/lc3_wss0140.php
 # and https://codeinthehole.com/tips/bash-error-reporting/
@@ -17,16 +13,34 @@ cleanup_complete=0
 cleanup() {
   if [ $SERVER_IS_REMOTE ]; then
     echo 'closing down remote'
-    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "direnv exec "$TARGET_DIR" jupyter notebook stop $port"
-    if [ ! -z "$DB_SERVER_ADDRESS" ]; then
-      ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "ssh -S /tmp/jlsession:%h:%p:%r -O exit ""$DB_SERVER_ADDRESS"
+    if [ -e /tmp/jlsession:%h:%p:%r ]; then
+      if [ ! -z "$port" ]; then
+        ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "direnv exec "$TARGET_DIR" jupyter notebook stop $port"
+      fi
+      for t in $tunnels; do
+        IFS=':' read -r -a tunnels_array <<< "$t"
+        local_port="${tunnels_array[0]}"
+        remote_server_address="${tunnels_array[1]}"
+        remote_port="${tunnels_array[2]}"
+        echo "Closing tunnel from port $local_port of jupyter server to port $remote_port of $remote_server_address"
+        ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "ssh -S /tmp/jlsession:%h:%p:%r -O exit ""$remote_server_address"
+      done
+      ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS"
     fi
-    ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS"
     echo 'bye (remote)'
   else
-    direnv exec "$TARGET_DIR" jupyter notebook stop $port
-    if [ ! -z "$DB_SERVER_ADDRESS" ]; then
-      ssh -S /tmp/jlsession:%h:%p:%r -O exit "$DB_SERVER_ADDRESS"
+    if [ ! -z "$port" ]; then
+      direnv exec "$TARGET_DIR" jupyter notebook stop $port
+    fi
+    if [ -e /tmp/jlsession:%h:%p:%r ]; then
+      for t in $tunnels; do
+        IFS=':' read -r -a tunnels_array <<< "$t"
+        local_port="${tunnels_array[0]}"
+        remote_server_address="${tunnels_array[1]}"
+        remote_port="${tunnels_array[2]}"
+        echo "Closing tunnel from port $local_port of jupyter server to port $remote_port of $remote_server_address"
+        ssh -S /tmp/jlsession:%h:%p:%r -O exit "$remote_server_address"
+      done
     fi
     echo 'bye (local)'
   fi
@@ -65,22 +79,29 @@ error_exit() {
 trap error_exit ERR
 trap cleanup EXIT INT QUIT TERM
 
-if [[ "$1" == '-h' ]] || [[ "$1" == '--help' ]]; then
-  echo "$HELP_MSG"
-  exit 0
-fi
+############################################
+# Handle CLI args with argbash
+# To edit CLI args, edit template section of <myscript>.argbash.sh and run argbash:
+#   argbash <myscript>.argbash.sh -o <myscript>.argbash.sh
+# where <myscript> should be the name of this script, ie., $(basename $0)
+source "$0.argbash.sh"
+target="$_arg_target"
+port="$_arg_port"
+tunnels="$_arg_tunnel"
+############################################
 
-# if input has a colon, assume it's a remote target
-if [[ "$1" == *":"* ]]; then
-  JUPYTER_SERVER_ADDRESS="${1%:*}"
-  TARGET_DIR="${1##*:}"
+# ssh doesn't like '~' in the paths
+ssh_safe_target=$(echo "$target" | sed 's/:~/:$HOME/')
+echo "ssh_safe_target: $ssh_safe_target"
+
+# if input has a colon, assume target is referring to a remote jupyter server
+if [[ "$ssh_safe_target" == *":"* ]]; then
+  SERVER_IS_REMOTE=1
+  JUPYTER_SERVER_ADDRESS="${ssh_safe_target%:*}"
+  TARGET_DIR="${ssh_safe_target##*:}"
 else
-  TARGET_DIR="$1"
+  TARGET_DIR="$ssh_safe_target"
 fi
-
-DB_SERVER_ADDRESS="wikipathways-workspace.gladstone.internal"
-
-TARGET_DIR=${TARGET_DIR:-'./'}
 
 token=""
 
@@ -89,10 +110,10 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
     echo "Launching locally..."
     token=$(bash ./jl_launch_local.sh "$TARGET_DIR" "$port")
   else
-    error_exit "$HELP_MSG"
+    error_exit "jupyter-lab not installed locally. Did you mean to run on a remote server?
+    Run $0 --help to see how to specify a remote server and target directory."
   fi
 else
-  SERVER_IS_REMOTE=1
   echo "Launching remote server $JUPYTER_SERVER_ADDRESS..."
 
   # ssh remoteServer 'bash -s' -- < script.sh --argument
@@ -115,23 +136,22 @@ fi
 
 url="http://localhost:$port/?token=$token"
 
-## NOTE: disabled for now. DB and jupyter are currently on the same machine.
-## Maybe specifying a db server address should be a command line option?
-
-## TODO: the following works, but I'd like to do this the same way as I connect
-## to a remote jupyter server. However, that isn't working. It seems I need to
-## leave the ssh session "live" and use ctrl-d to exit when I'm done.
-if [ ! -z "$DB_SERVER_ADDRESS" ]; then
-  echo "Creating db tunnel"
-  # access via URI like postgres://localhost:3333/pfocr_plus
+for t in $tunnels; do
+  IFS=':' read -r -a tunnels_array <<< "$t"
+  local_port="${tunnels_array[0]}"
+  remote_server_address="${tunnels_array[1]}"
+  remote_port="${tunnels_array[2]}"
+  echo "Creating tunnel from port $local_port of jupyter server to port $remote_port of $remote_server_address"
+  # if this is a tunnel to a remote database, you can access it in jupyterlab
+  # via a URI like postgres://localhost:3333/pfocr_plus
   if [ $SERVER_IS_REMOTE ]; then
     ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" \
-      'ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f '"$DB_SERVER_ADDRESS"
+      'ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L '$local_port':localhost':$remote_port' -N -f '"$remote_server_address"
   else
-    ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f "$DB_SERVER_ADDRESS"
+    ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L $local_port:localhost:$remote_port -N -f "$remote_server_address"
   fi
   # TODO: if there's a password prompt, will the code above miss it?
-fi
+done
 
 if xdg-open --version >/dev/null 2>&1; then
   # NixOS
