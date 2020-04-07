@@ -93,6 +93,7 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   fi
 else
   SERVER_IS_REMOTE=1
+  echo "Launching remote server $JUPYTER_SERVER_ADDRESS..."
 
   # ssh remoteServer 'bash -s' -- < script.sh --argument
   # see https://unix.stackexchange.com/questions/87405/how-can-i-execute-local-script-on-remote-machine-and-include-arguments
@@ -122,28 +123,15 @@ url="http://localhost:$port/?token=$token"
 ## leave the ssh session "live" and use ctrl-d to exit when I'm done.
 if [ ! -z "$DB_SERVER_ADDRESS" ]; then
   echo "Creating db tunnel"
+  # access via URI like postgres://localhost:3333/pfocr_plus
   if [ $SERVER_IS_REMOTE ]; then
-    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f '"$DB_SERVER_ADDRESS"
-    #ssh "$JUPYTER_SERVER_ADDRESS" -t "ssh -L 3333:localhost:5432 -N -f \"$DB_SERVER_ADDRESS\""
+    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" \
+      'ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f '"$DB_SERVER_ADDRESS"
   else
     ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f "$DB_SERVER_ADDRESS"
-    #ssh -L 3333:localhost:5432 -N -f "$DB_SERVER_ADDRESS"
   fi
+  # TODO: if there's a password prompt, will the code above miss it?
 fi
-
-## TODO: The following code doesn't work (at least for a local jupyter server):
-## I want to get the db tunnel working the same way as the jupyter tunnel.
-#echo "Starting db tunnel..."
-## access via URI like postgres://localhost:3333/pfocr_plus
-#if [ $SERVER_IS_REMOTE ]; then
-#  echo "TODO: look into how to create db tunnel"
-#  # maybe it's something like this?
-#  nohup ssh -N -L 3333:"$JUPYTER_SERVER_ADDRESS":5432 "$DB_SERVER_ADDRESS" >/dev/null &
-#else
-#  nohup ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS" >/dev/null &
-#fi
-#db_tunnel_pid=$!
-## TODO: if there's a password prompt, the code above will miss it.
 
 if xdg-open --version >/dev/null 2>&1; then
   # NixOS
