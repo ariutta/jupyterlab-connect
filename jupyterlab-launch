@@ -1,41 +1,13 @@
 #!/usr/bin/env bash
 
 OUTPUT_FILE=$(mktemp) || exit 1
-
-# limit memory available to the process, in order to avoid OOM errors that crash the system
 port="8889"
-BASE_SERVER_START_CMD="jupyter lab --no-browser --port=$port"
-SERVER_START_CMD=$(cat <<EOF
-memory_free="\$(free -g | awk '/Mem:/ { print \$4 }')";
-memory_available="\$(free -g | awk '/Mem:/ { print \$7 }')";
-jupyterlab_memory_limit="\$(echo "(\$memory_free + \$memory_available) / 3" | bc)";
-if \$(systemd-run --version >/dev/null 2>&1); then
-  systemd-run --user --scope -p MemoryLimit=\$jupyterlab_memory_limit'G' $BASE_SERVER_START_CMD;
-else
-  $BASE_SERVER_START_CMD;
-fi
-EOF
-)
-
-# TODO
-# I haven't gotten the systemd-run option to work via direnv exec.
-# What if jupyterlab_memory_limit is too low or otherwise invalid?
-# What if jupyter is already running? Need to detect whether it's a duplicate.
-# Maybe these commands might be useful:
-#   jupyter notebook list --jsonlist
-#   jupyter notebook list --jsonlist | jq '.[].port'
-#   jupyter notebook list --jsonlist | jq '.[].pid'
-#   jupyter notebook list --jsonlist | jq '.[].notebook_dir'
-# to stop it for a specific port:
-#   jupyter notebook stop 8889
 
 HELP_MSG="jupyterlab-launch <target>
     When server is local, target defaults to pwd.
     When server is remote, an ssh-style url is required, e.g.:
       jupyterlab-launch nixos.gladstone.internal:code/jupyterlab-demo"
 
-server_pid=""
-jupyter_tunnel_pid="" 
 # Based on http://linuxcommand.org/lc3_wss0140.php
 # and https://codeinthehole.com/tips/bash-error-reporting/
 PROGNAME=$(basename "$0")
@@ -43,42 +15,20 @@ PROGNAME=$(basename "$0")
 cleanup_complete=0
 
 cleanup() {
-  #   jupyter notebook list --jsonlist | jq '.[].port'
-  #   jupyter notebook list --jsonlist | jq '.[].pid'
-  #   jupyter notebook list --jsonlist | jq '.[].notebook_dir'
-  # to stop it for a specific port:
-  #   jupyter notebook stop 8889
-  echo "server_pid: $server_pid"
   if [ $SERVER_IS_REMOTE ]; then
-    ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ jupyter notebook list --jsonlist | jq . || exit 1"
-    ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ jupyter notebook stop $port || exit 1"
+    echo 'closing down remote'
+    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "direnv exec "$TARGET_DIR" jupyter notebook stop $port"
+    if [ ! -z "$DB_SERVER_ADDRESS" ]; then
+      ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "ssh -S /tmp/jlsession:%h:%p:%r -O exit ""$DB_SERVER_ADDRESS"
+    fi
+    ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS"
+    echo 'bye (remote)'
   else
-    jupyter notebook list --jsonlist | jq .
-    jupyter notebook stop $port
-  fi
-
-  if [[ -f "$OUTPUT_FILE" ]]; then
-    rm "$OUTPUT_FILE"
-  fi
-  # TODO: should we delete the nohup.out file created when server is remote?
-  # (it's a different file from $OUTPUT_FILE)
-
-  # stopping the server and tunnel processes, if running
-  if [[ -n "$server_pid" ]] && [[ -n "$(ps -p $server_pid -o pid=)" ]]; then
-    echo "killing server_pid $server_pid"
-    kill -9 "$server_pid"
-  fi
-  if [[ -n "$jupyter_tunnel_pid" ]] && [[ -n "$(ps -p $jupyter_tunnel_pid -o pid=)" ]]; then
-    kill -9 "$jupyter_tunnel_pid"
-  fi
-  if [[ -n "$db_tunnel_pid" ]] && [[ -n "$(ps -p $db_tunnel_pid -o pid=)" ]]; then
-    kill -9 "$db_tunnel_pid"
-  fi
-
-  if [ $SERVER_IS_REMOTE ]; then
-    ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ echo $server_pid || exit 1"
-  else
-    jupyter notebook list --jsonlist | jq .
+    direnv exec "$TARGET_DIR" jupyter notebook stop $port
+    if [ ! -z "$DB_SERVER_ADDRESS" ]; then
+      ssh -S /tmp/jlsession:%h:%p:%r -O exit "$DB_SERVER_ADDRESS"
+    fi
+    echo 'bye (local)'
   fi
 
   cleanup_complete=1
@@ -112,28 +62,6 @@ error_exit() {
   exit 1
 }
 
-get_server_url() {
-  attempt_iteration=${1:-1}
-  ATTEMPT_LIMIT=5
-  WAIT_SEC=3
-
-  echo "Waiting for server to start (Attempt $attempt_iteration/$ATTEMPT_LIMIT)..." 1>&2
-  sleep $WAIT_SEC
-  cat "$OUTPUT_FILE" 1>&2
-
-  url="$(perl -ne "print if s/(^|.*?[ \"])(http.*?)([\" >].*|$)/\$2/" "$OUTPUT_FILE" | head -n 1)"
-  if [[ -z "$url" ]]; then
-    if [[ $attempt_iteration -eq $ATTEMPT_LIMIT ]]; then
-      error_exit "No server URL found"
-    else
-      next_attempt_iteration=$(echo "$attempt_iteration + 1" | bc)
-      get_server_url $next_attempt_iteration
-    fi
-  else
-    echo "$url"
-  fi
-}
-
 trap error_exit ERR
 trap cleanup EXIT INT QUIT TERM
 
@@ -154,63 +82,37 @@ DB_SERVER_ADDRESS="wikipathways-workspace.gladstone.internal"
 
 TARGET_DIR=${TARGET_DIR:-'./'}
 
+token=""
+
 if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   if jupyter-lab --version >/dev/null 2>&1; then
     echo "Launching locally..."
-    INITIAL_DIR="$(pwd)"
-    cd "$TARGET_DIR" || error_exit "Could not change directory to $TARGET_DIR"
-    nohup sh -c "$SERVER_START_CMD" >"$OUTPUT_FILE" &
-    server_pid=$!
-    echo "server_pid: $server_pid"
-    cd "$INITIAL_DIR" || error_exit "Could not return to $INITIAL_DIR"
+    token=$(bash ./jl_launch_local.sh "$TARGET_DIR" "$port")
   else
     error_exit "$HELP_MSG"
   fi
 else
   SERVER_IS_REMOTE=1
-  # TODO: only the line below worked:
-  nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $BASE_SERVER_START_CMD || exit 1" >"$OUTPUT_FILE" &
-  # but none of the ones below worked:
-  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ \"$SERVER_START_CMD\" || exit 1" >"$OUTPUT_FILE" &
-  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ $SERVER_START_CMD || exit 1" >"$OUTPUT_FILE" &
-  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ sh -c \"$SERVER_START_CMD\" || exit 1" >"$OUTPUT_FILE" &
-  #nohup ssh "$JUPYTER_SERVER_ADDRESS" -tt "cd $TARGET_DIR && direnv exec ./ sh -c $SERVER_START_CMD || exit 1" >"$OUTPUT_FILE" &
-  server_pid=$!
-  if [[ -z "$(ps -p $server_pid -o pid=)" ]]; then
-    error_exit "Failed to launch jupyter on remote server"
-  fi
-  sleep 3
+
+  # ssh remoteServer 'bash -s' -- < script.sh --argument
+  # see https://unix.stackexchange.com/questions/87405/how-can-i-execute-local-script-on-remote-machine-and-include-arguments
+  token=$(ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- < ./jl_launch_local.sh "$TARGET_DIR" "$port")
+  # TODO: could we use mosh for the tunnel?
+  # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
+
+  echo "Starting tunnel to jupyter server..."
+  ssh -S /tmp/jlsession:%h:%p:%r -L $port:localhost:$port -N -f "$JUPYTER_SERVER_ADDRESS"
+  # -S: re-use existing ssh connection
+  # -L: local port forwarding
+  # -f: send to background
+  # -N: don't issue any commands on remote server
 fi
 
-MINIMUM_JUPYTER_SERVER_LOAD_TIME=3
-sleep $MINIMUM_JUPYTER_SERVER_LOAD_TIME
-url=$(get_server_url)
-port="$(echo "$url" | sed -E 's/.*:([0-9]{4}).*/\1/')"
-if [[ -z "$port" ]]; then
-  error_exit "No port found"
+if [[ -z "$token" ]]; then
+  error_exit "No token found"
 fi
 
-if [ $SERVER_IS_REMOTE ]; then
-  echo "Starting tunnel..."
-  nohup ssh -N -L $port:localhost:$port "$JUPYTER_SERVER_ADDRESS" >/dev/null &
-  jupyter_tunnel_pid=$!
-  if [[ -z "$(ps -p $jupyter_tunnel_pid -o pid=)" ]]; then
-    error_exit "Failed to create tunnel to jupyter server (for HTTP)"
-  fi
-  sleep 3
-fi
-
-if xdg-open --version >/dev/null 2>&1; then
-  # NixOS
-  xdg-open "$url"
-elif which open >/dev/null 2>&1; then
-  # macOS
-  open "$url"
-else
-  echo "Warning: Not sure how to open browser."
-  echo "Here's the server output:"
-  cat "$OUTPUT_FILE"
-fi
+url="http://localhost:$port/?token=$token"
 
 ## NOTE: disabled for now. DB and jupyter are currently on the same machine.
 ## Maybe specifying a db server address should be a command line option?
@@ -218,12 +120,16 @@ fi
 ## TODO: the following works, but I'd like to do this the same way as I connect
 ## to a remote jupyter server. However, that isn't working. It seems I need to
 ## leave the ssh session "live" and use ctrl-d to exit when I'm done.
-#echo "Ctrl-d to close db tunnel"
-#if [ $SERVER_IS_REMOTE ]; then
-#  ssh "$JUPYTER_SERVER_ADDRESS" -t "ssh -N -L 3333:localhost:5432 \"$DB_SERVER_ADDRESS\""
-#else
-#  ssh -N -L 3333:localhost:5432 "$DB_SERVER_ADDRESS"
-#fi
+if [ ! -z "$DB_SERVER_ADDRESS" ]; then
+  echo "Creating db tunnel"
+  if [ $SERVER_IS_REMOTE ]; then
+    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f '"$DB_SERVER_ADDRESS"
+    #ssh "$JUPYTER_SERVER_ADDRESS" -t "ssh -L 3333:localhost:5432 -N -f \"$DB_SERVER_ADDRESS\""
+  else
+    ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L 3333:localhost:5432 -N -f "$DB_SERVER_ADDRESS"
+    #ssh -L 3333:localhost:5432 -N -f "$DB_SERVER_ADDRESS"
+  fi
+fi
 
 ## TODO: The following code doesn't work (at least for a local jupyter server):
 ## I want to get the db tunnel working the same way as the jupyter tunnel.
@@ -238,6 +144,16 @@ fi
 #fi
 #db_tunnel_pid=$!
 ## TODO: if there's a password prompt, the code above will miss it.
+
+if xdg-open --version >/dev/null 2>&1; then
+  # NixOS
+  xdg-open "$url"
+elif which open >/dev/null 2>&1; then
+  # macOS
+  open "$url"
+else
+  echo "Not sure how to open browser. Visit $url to see the notebook."
+fi
 
 echo ""
 read -rp "To quit, hit Enter"

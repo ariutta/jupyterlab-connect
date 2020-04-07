@@ -2,8 +2,8 @@
 
 OUTPUT_FILE=$(mktemp) || exit 1
 
-port=8889
-TARGET_DIR="$(readlink -f "Documents/pfocr/analysis20200131")"
+TARGET_DIR="$(readlink -f "$1")"
+port="$2"
 
 # Note: --arg always makes strings, so we need to convert '.port' (in the JSON) from number to string to match
 if direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -e --arg port $port 'map(select((.port | tostring) == $port)) | length > 0' >/dev/null; then
@@ -11,7 +11,7 @@ if direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -e --arg port
   notebook_dir="$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .notebook_dir')"
 
   if [[ "$(readlink -f "$notebook_dir")" == "$TARGET_DIR" ]]; then
-    echo "Port $port already started."
+    echo "Port $port already started." >/dev/stderr
     token=$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .token')
     echo "$token"
     exit 0
@@ -43,16 +43,5 @@ token=$((nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FIL
     jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .token')
 
 echo "$token"
+
 exit 0
-
-
-
-
-# old stuff below
-
-#if [[-z $(direnv exec "\"$TARGET_DIR\" jupyter notebook list --jsonlist | jq '.[].$port'" | grep $port)]]; then
-#  echo 'good'
-#fi
-#ssh -S /tmp/jlsession:%h:%p:%r nixos '(nohup direnv exec ~/Documents/pfocr/analysis20200131 jupyter lab --no-browser --port=8889 > ~/Documents/pfocr/analysis20200131/jl.log 2>&1 &) && watch -d -t -g ls -lR ~/Documents/pfocr/analysis20200131/jl.log && direnv exec ~/Documents/pfocr/analysis20200131 jupyter notebook list --jsonlist | jq ".[].token"'
-#ssh -S /tmp/jlsession:%h:%p:%r nixos 'direnv exec ~/Documents/pfocr/analysis20200131 jupyter notebook stop 8889'
-#ssh -S /tmp/jlsession:%h:%p:%r -O exit nixos
