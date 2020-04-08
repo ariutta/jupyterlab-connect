@@ -2,6 +2,7 @@
 
 # Created by argbash-init v2.8.1
 # ARG_OPTIONAL_SINGLE([port],[p],[Port of jupyter server],[8889])
+# ARG_OPTIONAL_BOOLEAN([browser],[],[Open the notebook in a browser after startup.],[on])
 # ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on jupyter server>:<remote server address>:<port on remote server>\n  Tunnel to create, e.g., to connect to a remote database server.\n  Example: 3333:wikipathways-workspace:5432],[])
 # ARG_POSITIONAL_DOUBLEDASH([])
 # ARG_POSITIONAL_SINGLE([target],[When jupyter server is local, target defaults to pwd.\n  When jupyter server is remote, an ssh-style url is required, e.g.:\n   jupyterlab-launch nixos.gladstone.internal:code/jupyterlab-demo],[./])
@@ -35,17 +36,19 @@ _positionals=()
 _arg_target="./"
 # THE DEFAULTS INITIALIZATION - OPTIONALS
 _arg_port="8889"
+_arg_browser="on"
 _arg_tunnel=()
 
 
 print_help()
 {
 	printf '%s\n' "Connect to your jupyterlab server"
-	printf 'Usage: %s [-p|--port <arg>] [-t|--tunnel <arg>] [-h|--help] [--] [<target>]\n' "$0"
+	printf 'Usage: %s [-p|--port <arg>] [--(no-)browser] [-t|--tunnel <arg>] [-h|--help] [--] [<target>]\n' "$0"
 	printf '\t%s\n' "<target>: When jupyter server is local, target defaults to pwd.
 		  When jupyter server is remote, an ssh-style url is required, e.g.:
 		   jupyterlab-launch nixos.gladstone.internal:code/jupyterlab-demo (default: './')"
 	printf '\t%s\n' "-p, --port: Port of jupyter server (default: '8889')"
+	printf '\t%s\n' "--browser, --no-browser: Open the notebook in a browser after startup. (on by default)"
 	printf '\t%s\n' "-t, --tunnel: <port on jupyter server>:<remote server address>:<port on remote server>
 		  Tunnel to create, e.g., to connect to a remote database server.
 		  Example: 3333:wikipathways-workspace:5432 (empty by default)"
@@ -80,6 +83,10 @@ parse_commandline()
 				;;
 			-p*)
 				_arg_port="${_key##-p}"
+				;;
+			--no-browser|--browser)
+				_arg_browser="on"
+				test "${1:0:5}" = "--no-" && _arg_browser="off"
 				;;
 			-t|--tunnel)
 				test $# -lt 2 && die "Missing value for the optional argument '$_key'." 1

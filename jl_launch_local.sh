@@ -6,13 +6,13 @@ TARGET_DIR="$(readlink -f "$1")"
 port="$2"
 
 # Note: --arg always makes strings, so we need to convert '.port' (in the JSON) from number to string to match
-if direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -e --arg port $port 'map(select((.port | tostring) == $port)) | length > 0' >/dev/null; then
+if direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | jq -e --arg port $port 'map(select((.port | tostring) == $port)) | length > 0' >/dev/null; then
 
-  notebook_dir="$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .notebook_dir')"
+  notebook_dir="$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .notebook_dir')"
 
   if [[ "$(readlink -f "$notebook_dir")" == "$TARGET_DIR" ]]; then
     echo "Port $port already started." >/dev/stderr
-    token=$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .token')
+    token=$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .token')
     echo "$token"
     exit 0
   else
@@ -39,7 +39,7 @@ fi
 # TODO: DRY this up. See section for when jupyter server already running.
 token=$((nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) && \
   watch -d -t -g ls -lR "$OUTPUT_FILE" >/dev/null && \
-  direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist | \
+  direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | \
     jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .token')
 
 echo "$token"
