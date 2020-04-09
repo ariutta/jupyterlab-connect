@@ -28,19 +28,19 @@ cleanup() {
 
       if ls -1 /tmp/jlsession":$JUPYTER_SERVER_ADDRESS:"* >/dev/null 2>&1; then
         ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-          < "$SCRIPT_DIR"/jupyter-notebook-stop.sh "$TARGET_DIR" "$port"
+          < "$SCRIPT_DIR/../lib/jupyter-notebook-stop.sh" "$TARGET_DIR" "$port"
         for t in $tunnels; do
           ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-            < "$SCRIPT_DIR"/close-tunnel.sh "$tunnel"
+            < "$SCRIPT_DIR/../lib/close-tunnel.sh" "$tunnel"
         done
         ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS" \
           2>/dev/null
       fi
     else
-      sh "$SCRIPT_DIR"/jupyter-notebook-stop.sh "$TARGET_DIR" $port
+      sh "$SCRIPT_DIR/../lib/jupyter-notebook-stop.sh" "$TARGET_DIR" $port
 
       for tunnel in $tunnels; do
-        sh "$SCRIPT_DIR"/close-tunnel.sh "$tunnel"
+        sh "$SCRIPT_DIR/../lib/close-tunnel.sh" "$tunnel"
       done
     fi
 
@@ -84,7 +84,7 @@ trap cleanup EXIT INT QUIT TERM
 # To edit CLI args, edit template section of <myscript>.argbash.sh and run argbash:
 #   argbash <myscript>.argbash.sh -o <myscript>.argbash.sh
 # where <myscript> should be the name of this script, ie., $(basename $0)
-source "$0.argbash.sh"
+source "$SCRIPT_DIR/../lib/$PROGNAME.argbash.sh"
 target="$_arg_target"
 port="$_arg_port"
 tunnels="$_arg_tunnel"
@@ -119,15 +119,15 @@ echo "******************************************"
 
 if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   if direnv exec "$TARGET_DIR" jupyter-lab --version >/dev/null 2>&1; then
-    token=$(bash "$SCRIPT_DIR"/connect.sh "$TARGET_DIR" "$port")
+    token=$(bash "$SCRIPT_DIR/../lib/connect.sh" "$TARGET_DIR" "$port")
   else
     error_exit "jupyter-lab not installed locally. Did you mean to run on a remote server?
-    Run $0 --help to see how to specify a remote server and target directory."
+    Run $PROGNAME --help to see how to specify a remote server and target directory."
   fi
 else
   token=$(ssh -o ControlMaster=yes -o ControlPersist=yes \
     -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" \
-    'bash -s' -- < "$SCRIPT_DIR"/connect.sh "$TARGET_DIR" "$port")
+    'bash -s' -- < "$SCRIPT_DIR/../lib/connect.sh" "$TARGET_DIR" "$port")
 
   # TODO: could we use mosh for the tunnel?
   # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
@@ -155,9 +155,9 @@ url="http://localhost:$port/?token=$token"
 for tunnel in $tunnels; do
   if [ $SERVER_IS_REMOTE ]; then
     ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-      < "$SCRIPT_DIR"/open-tunnel.sh "$tunnel"
+      < "$SCRIPT_DIR/../lib/open-tunnel.sh" "$tunnel"
   else
-    sh "$SCRIPT_DIR"/open-tunnel.sh "$tunnel"
+    sh "$SCRIPT_DIR/../lib/open-tunnel.sh" "$tunnel"
   fi
 done
 
