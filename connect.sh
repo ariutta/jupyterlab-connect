@@ -11,7 +11,7 @@ if direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | jq -
   notebook_dir="$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .notebook_dir')"
 
   if [[ "$(readlink -f "$notebook_dir")" == "$TARGET_DIR" ]]; then
-    echo "Port $port already started." >/dev/stderr
+    echo "Jupyter server on Port $port already running." >/dev/stderr
     token=$(direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null | jq -r --arg port $port 'map(select((.port | tostring) == $port)) | first | .token')
     echo "$token"
     exit 0

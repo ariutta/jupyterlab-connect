@@ -11,12 +11,12 @@ PROGNAME=$(basename "$0")
 cleanup_complete=0
 
 cleanup() {
-  cleanup_msg="Ending jupyter server on $jupyter_server_hostname"
+  cleanup_msg="Disconnecting jupyter server on $jupyter_server_hostname"
   echo "******************************************"
   if [ $SERVER_IS_REMOTE ]; then
-    echo "Ending jupyter server on $jupyter_server_hostname (remote)"
+    echo "$cleanup_msg (remote)"
   else
-    echo "Ending jupyter server on $jupyter_server_hostname (local)"
+    echo "$cleanup_msg (local)"
   fi
   echo "******************************************"
 
@@ -118,17 +118,17 @@ remote_hosts_controlled=()
 
 echo "******************************************"
 if [ $SERVER_IS_REMOTE ]; then
-  echo "Launching jupyter server on $jupyter_server_hostname (remote)"
+  echo "Connecting jupyter server on $jupyter_server_hostname (remote)"
   echo "for $ssh_safe_target"
 else
-  echo "Launching jupyter server on $jupyter_server_hostname (local)"
+  echo "Connecting jupyter server on $jupyter_server_hostname (local)"
   echo "for $ssh_safe_target"
 fi
 echo "******************************************"
 
 if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   if direnv exec "$TARGET_DIR" jupyter-lab --version >/dev/null 2>&1; then
-    token=$(bash "$SCRIPT_DIR"/jl_launch_local.sh "$TARGET_DIR" "$port")
+    token=$(bash "$SCRIPT_DIR"/connect.sh "$TARGET_DIR" "$port")
   else
     error_exit "jupyter-lab not installed locally. Did you mean to run on a remote server?
     Run $0 --help to see how to specify a remote server and target directory."
@@ -136,14 +136,14 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
 else
   # ssh remoteServer 'bash -s' -- < script.sh --argument
   # see https://unix.stackexchange.com/questions/87405/how-can-i-execute-local-script-on-remote-machine-and-include-arguments
-  token=$(ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- < "$SCRIPT_DIR"/jl_launch_local.sh "$TARGET_DIR" "$port")
+  token=$(ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- < "$SCRIPT_DIR"/connect.sh "$TARGET_DIR" "$port")
   # TODO: could we use mosh for the tunnel?
   # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
 
   remote_hosts_controlled+=("$JUPYTER_SERVER_ADDRESS")
 
   echo ""
-  echo "Creating tunnel to allow browser to connect to jupyter server:"
+  echo "Opening tunnel to allow browser to connect to jupyter server:"
   echo "localhost:$port on $(hostname) <-> $JUPYTER_SERVER_ADDRESS:$port on $jupyter_server_hostname"  
   echo ""
   ssh -S /tmp/jlsession:%h:%p:%r -L $port:localhost:$port -N -f "$JUPYTER_SERVER_ADDRESS"
@@ -165,7 +165,7 @@ for t in $tunnels; do
   local_port="${tunnels_array[0]}"
   remote_server_address="${tunnels_array[1]}"
   remote_port="${tunnels_array[2]}"
-  echo "Creating tunnel to connect jupyter server host and external service:"
+  echo "Opening tunnel to connect jupyter server host and external service:"
   echo "$jupyter_server_hostname:$local_port on $jupyter_server_hostname <-> $remote_server_address:$remote_port"
 
   control_params=""
