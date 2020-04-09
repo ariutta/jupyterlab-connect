@@ -146,7 +146,7 @@ fi
 
 jupyterlab_started=1
 
-if [[ -z "$token" ]]; then
+if [[ -z "$token" ]] || [[ "$token" == 'null' ]]; then
   error_exit "No token found"
 fi
 
