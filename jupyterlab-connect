@@ -11,50 +11,43 @@ PROGNAME=$(basename "$0")
 cleanup_complete=0
 
 cleanup() {
-  cleanup_msg="Disconnecting jupyter server on $jupyter_server_hostname"
-  echo "******************************************"
-  if [ $SERVER_IS_REMOTE ]; then
-    echo "$cleanup_msg (remote)"
-  else
-    echo "$cleanup_msg (local)"
-  fi
-  echo "******************************************"
-
-  if [ $SERVER_IS_REMOTE ]; then
-    # TODO: how do we get the actual name of the session file?
-    # something approx. like this:
-    # ls -1 /tmp/jlsession:remote-address:port:username
-
-    if ls -1 /tmp/jlsession":$JUPYTER_SERVER_ADDRESS:"* >/dev/null 2>&1; then
-      ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "direnv exec "$TARGET_DIR" jupyter notebook stop $port" 2>/dev/null
-      for t in $tunnels; do
-        IFS=':' read -r -a tunnels_array <<< "$t"
-        local_port="${tunnels_array[0]}"
-        remote_server_address="${tunnels_array[1]}"
-        remote_port="${tunnels_array[2]}"
-        echo "Closing tunnel: $JUPYTER_SERVER_ADDRESS:$local_port <-> $remote_server_address:$remote_port"
-        ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" "ssh -S /tmp/jlsession:%h:%p:%r -O exit ""$remote_server_address" 2>/dev/null
-      done
-      ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS" 2>/dev/null
+  if [[ $jupyterlab_started -eq 1 ]]; then
+    echo "******************************************"
+    cleanup_msg="Disconnecting from jupyter server"
+    if [ $SERVER_IS_REMOTE ]; then
+      echo "$cleanup_msg (remote)"
+    else
+      echo "$cleanup_msg (local)"
     fi
-  else
-    direnv exec "$TARGET_DIR" jupyter notebook stop $port 2>/dev/null
+    echo "******************************************"
 
-    for t in $tunnels; do
-      IFS=':' read -r -a tunnels_array <<< "$t"
-      local_port="${tunnels_array[0]}"
-      remote_server_address="${tunnels_array[1]}"
-      remote_port="${tunnels_array[2]}"
-      if ls -1 /tmp/jlsession":$remote_server_address:"* >/dev/null 2>&1; then
-        echo "Closing tunnel: $JUPYTER_SERVER_ADDRESS:$local_port <-> $remote_server_address:$remote_port"
-        ssh -S /tmp/jlsession:%h:%p:%r -O exit "$remote_server_address" 2>/dev/null
+    if [ $SERVER_IS_REMOTE ]; then
+      # TODO: how do we get the actual name of the session file?
+      # something approx. like this:
+      # ls -1 /tmp/jlsession:remote-address:port:username
+
+      if ls -1 /tmp/jlsession":$JUPYTER_SERVER_ADDRESS:"* >/dev/null 2>&1; then
+        ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+          < "$SCRIPT_DIR"/jupyter-notebook-stop.sh "$TARGET_DIR" "$port"
+        for t in $tunnels; do
+          ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+            < "$SCRIPT_DIR"/close-tunnel.sh "$tunnel"
+        done
+        ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS" \
+          2>/dev/null
       fi
-    done
+    else
+      sh "$SCRIPT_DIR"/jupyter-notebook-stop.sh "$TARGET_DIR" $port
+
+      for tunnel in $tunnels; do
+        sh "$SCRIPT_DIR"/close-tunnel.sh "$tunnel"
+      done
+    fi
+
+    echo "$PROGNAME: goodbye"
   fi
 
   cleanup_complete=1
-
-  echo "$PROGNAME: goodbye"
 }
 
 error_exit() {
@@ -105,10 +98,8 @@ ssh_safe_target=$(echo "$target" | sed 's/:~/:$HOME/')
 if [[ "$ssh_safe_target" == *":"* ]]; then
   SERVER_IS_REMOTE=1
   JUPYTER_SERVER_ADDRESS="${ssh_safe_target%:*}"
-  jupyter_server_hostname="$JUPYTER_SERVER_ADDRESS"
   TARGET_DIR="${ssh_safe_target##*:}"
 else
-  jupyter_server_hostname="$(hostname)"
   TARGET_DIR="$ssh_safe_target"
 fi
 
@@ -118,10 +109,10 @@ remote_hosts_controlled=()
 
 echo "******************************************"
 if [ $SERVER_IS_REMOTE ]; then
-  echo "Connecting jupyter server on $jupyter_server_hostname (remote)"
+  echo "Connecting to jupyter server on $JUPYTER_SERVER_ADDRESS (remote)"
   echo "for $ssh_safe_target"
 else
-  echo "Connecting jupyter server on $jupyter_server_hostname (local)"
+  echo "Connecting to jupyter server on $(hostname) (local)"
   echo "for $ssh_safe_target"
 fi
 echo "******************************************"
@@ -134,9 +125,10 @@ if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
     Run $0 --help to see how to specify a remote server and target directory."
   fi
 else
-  # ssh remoteServer 'bash -s' -- < script.sh --argument
-  # see https://unix.stackexchange.com/questions/87405/how-can-i-execute-local-script-on-remote-machine-and-include-arguments
-  token=$(ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- < "$SCRIPT_DIR"/connect.sh "$TARGET_DIR" "$port")
+  token=$(ssh -o ControlMaster=yes -o ControlPersist=yes \
+    -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" \
+    'bash -s' -- < "$SCRIPT_DIR"/connect.sh "$TARGET_DIR" "$port")
+
   # TODO: could we use mosh for the tunnel?
   # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
 
@@ -144,8 +136,7 @@ else
 
   echo ""
   echo "Opening tunnel to allow browser to connect to jupyter server:"
-  echo "localhost:$port on $(hostname) <-> $JUPYTER_SERVER_ADDRESS:$port on $jupyter_server_hostname"  
-  echo ""
+  echo "localhost:$port on $(hostname) <-> $JUPYTER_SERVER_ADDRESS:$port"  
   ssh -S /tmp/jlsession:%h:%p:%r -L $port:localhost:$port -N -f "$JUPYTER_SERVER_ADDRESS"
   # -S: re-use existing ssh connection
   # -L: local port forwarding
@@ -153,47 +144,24 @@ else
   # -N: don't issue any commands on remote server
 fi
 
+jupyterlab_started=1
+
 if [[ -z "$token" ]]; then
   error_exit "No token found"
 fi
 
 url="http://localhost:$port/?token=$token"
 
-echo ""
-for t in $tunnels; do
-  IFS=':' read -r -a tunnels_array <<< "$t"
-  local_port="${tunnels_array[0]}"
-  remote_server_address="${tunnels_array[1]}"
-  remote_port="${tunnels_array[2]}"
-  echo "Opening tunnel to connect jupyter server host and external service:"
-  echo "$jupyter_server_hostname:$local_port on $jupyter_server_hostname <-> $remote_server_address:$remote_port"
-
-  control_params=""
-  if [[ ! " ${remote_hosts_controlled[@]} " =~ " ${remote_server_address} " ]]; then
-    control_params="-o ControlMaster=yes -o ControlPersist=yes"
-    remote_hosts_controlled+=("$JUPYTER_SERVER_ADDRESS")
-  fi
-
-  # If this is a tunnel to database remote from the jupyter server, you can
-  # access it in jupyterlab via a URI like this:
-  #   postgres://localhost:3333/pfocr
-  # You don't need a tunnel for a database on the jupyter server. You can always
-  # connect to it like this:
-  #   postgres:///pfocr20200224
-
-  # TODO: if there's a password prompt, the code below won't handle it.
-
+for tunnel in $tunnels; do
   if [ $SERVER_IS_REMOTE ]; then
-    # We only want to specify ControlMaster=yes the first time.
-    # TODO: is there a cleaner way to do this?
-    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" \
-      'ssh '"$control_params"' -S /tmp/jlsession:%h:%p:%r -L '$local_port':localhost':$remote_port' -N -f '"$remote_server_address"
+    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+      < "$SCRIPT_DIR"/open-tunnel.sh "$tunnel"
   else
-    ssh "$control_params" -S /tmp/jlsession:%h:%p:%r -L $local_port:localhost:$remote_port -N -f "$remote_server_address"
+    sh "$SCRIPT_DIR"/open-tunnel.sh "$tunnel"
   fi
 done
-echo ""
 
+echo ""
 to_view_msg="To view the notebook, visit:\n   $url"
 if [ "$browser" == 'on' ]; then
   if xdg-open --version >/dev/null 2>&1; then
