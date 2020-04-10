@@ -1,18 +1,19 @@
 # Using argbash
 
-Add CLI arg handling to a script `start.sh` that already exists.
+Add CLI arg handling to an existing script named `src/start.sh`.
 
 ## First Time
 
 Create an argument parser and convert it to a script. Use options as per `argbash-init -h`.
 
 ```
-argbash-init -ss --pos project --opt volume start.m4
-argbash start-parsing.m4 -o start.argbash.sh --strip user-content
-rm start.m4 start-parsing.m4
+argbash-init -ss --pos project --opt volume src/start.m4
+argbash src/start-parsing.m4 -o src/start.argbash.sh --strip user-content
+chmod -x src/start.argbash.sh
+rm src/start.m4 src/start-parsing.m4
 ```
 
-Add the following to `start.sh`:
+Add the following to `src/start.sh`:
 
 ```
 ############################################
@@ -28,15 +29,18 @@ mypositionalarg="$_arg_mypositionalarg"
 Use it:
 
 ```
-./start.sh mypkg --volume myvolume1 --volume myvolume1
+./bin/start mypkg --volume myvolume1 --volume myvolume1
 ```
 
 ## Edit Args
 
-Edit template section of `start.argbash.sh` as per the (`argbash` API)[https://argbash.readthedocs.io/en/stable/guide.html#argbash-api]. Then re-run `argbash`:
+Edit template section of `src/start.argbash.sh` as per the (`argbash` API)[https://argbash.readthedocs.io/en/stable/guide.html#argbash-api]. Then re-run `argbash`:
 
 ```
-argbash start.argbash.sh -o start.argbash.sh
+argbash src/start.argbash.sh -o src/start.argbash.sh
+# this isn't looking correct:
+#argbash src/start.argbash.sh -t manpage -o share/man/start.1
+argbash src/start.argbash.sh -t completion -o share/completions.bash
 ```
 
-The argument handling is now updated.
+You should now see that the argument handling is updated.
