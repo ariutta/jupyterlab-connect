@@ -17,9 +17,7 @@ Option #1
 ```
 git clone https://github.com/ariutta/jupyterlab-connect.git
 cd jupyterlab-connect
-nix-shell -p pkgs.gnumake -p pkgs.argbash -p help2man
-make
-# Ctrl-d to exit
+nix-shell -p pkgs.gnumake -p pkgs.argbash -p help2man --command "make"
 ```
 
 Option #2

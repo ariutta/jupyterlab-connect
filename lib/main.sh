@@ -12,9 +12,7 @@
 
 # [ <-- needed because of Argbash
 
-# see https://stackoverflow.com/a/246128/5354298
-get_script_dir() { echo "$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"; }
-SCRIPT_DIR=$(get_script_dir)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || exit 1
 
 # Based on http://linuxcommand.org/lc3_wss0140.php
 # and https://codeinthehole.com/tips/bash-error-reporting/
@@ -23,36 +21,31 @@ PROGNAME=$(basename "$0")
 cleanup_complete=0
 
 cleanup() {
-  if [[ $jupyterlab_started -eq 1 ]]; then
+  if [[ $connection_attempted -eq 1 ]]; then
     echo "******************************************"
     cleanup_msg="Disconnecting from jupyter server"
-    if [ $SERVER_IS_REMOTE ]; then
+    if [ "$SERVER_IS_REMOTE" ]; then
       echo "$cleanup_msg (remote)"
     else
       echo "$cleanup_msg (local)"
     fi
     echo "******************************************"
 
-    if [ $SERVER_IS_REMOTE ]; then
-      # TODO: how do we get the actual name of the session file?
-      # something approx. like this:
-      # ls -1 /tmp/jlsession:remote-address:port:username
-
-      if ls -1 /tmp/jlsession":$JUPYTER_SERVER_ADDRESS:"* >/dev/null 2>&1; then
-        ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-          < "$SCRIPT_DIR/../lib/jupyter-notebook-stop.sh" "$TARGET_DIR" "$port"
-        for t in $tunnels; do
-          ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-            < "$SCRIPT_DIR/../lib/close-tunnel.sh" "$tunnel"
+    if [ "$SERVER_IS_REMOTE" ]; then
+      if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
+        ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+          "$TARGET_DIR" "$port" <"$SCRIPT_DIR/jupyter-notebook-stop.sh"
+        for tunnel in $tunnels; do
+          ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+            "$tunnel" <"$SCRIPT_DIR/close-tunnel.sh"
         done
-        ssh -S /tmp/jlsession:%h:%p:%r -O exit "$JUPYTER_SERVER_ADDRESS" \
-          2>/dev/null
+        ssh -qS "$ssh_control_path" -O exit "$JUPYTER_SERVER_ADDRESS"
       fi
     else
-      sh "$SCRIPT_DIR/../lib/jupyter-notebook-stop.sh" "$TARGET_DIR" $port
+      sh "$SCRIPT_DIR/jupyter-notebook-stop.sh" "$TARGET_DIR" "$port"
 
       for tunnel in $tunnels; do
-        sh "$SCRIPT_DIR/../lib/close-tunnel.sh" "$tunnel"
+        sh "$SCRIPT_DIR/close-tunnel.sh" "$tunnel"
       done
     fi
 
@@ -63,11 +56,11 @@ cleanup() {
 }
 
 error_exit() {
-#	----------------------------------------------------------------
-#	Function for exit due to fatal program error
-#		Accepts 1 argument:
-#			string containing descriptive error message
-#	----------------------------------------------------------------
+  #	----------------------------------------------------------------
+  #	Function for exit due to fatal program error
+  #		Accepts 1 argument:
+  #			string containing descriptive error message
+  #	----------------------------------------------------------------
 
   read -r line file <<<"$(caller)"
   echo "" 1>&2
@@ -90,6 +83,8 @@ error_exit() {
 
 trap error_exit ERR
 trap cleanup EXIT INT QUIT TERM
+
+ssh_control_path="$HOME/.ssh/.jupyterlab-connect-control-socket:%h:%p:%r"
 
 ############################################
 # Make pretty names for args parsed by argbash
@@ -127,15 +122,25 @@ echo "******************************************"
 
 if [[ -z "$JUPYTER_SERVER_ADDRESS" ]]; then
   if direnv exec "$TARGET_DIR" jupyter-lab --version >/dev/null 2>&1; then
-    token=$(bash "$SCRIPT_DIR/../lib/connect.sh" "$TARGET_DIR" "$port")
+    token=$(bash "$SCRIPT_DIR/connect.sh" "$TARGET_DIR" "$port")
   else
     error_exit "jupyter-lab not installed locally. Did you mean to run on a remote server?
     Run $PROGNAME --help to see how to specify a remote server and target directory."
   fi
 else
-  token=$(ssh -o ControlMaster=yes -o ControlPersist=yes \
-    -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" \
-    'bash -s' -- < "$SCRIPT_DIR/../lib/connect.sh" "$TARGET_DIR" "$port")
+  # We only want to specify ControlMaster=yes the first time.
+  if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
+    ControlMaster="no"
+  else
+    ControlMaster="yes"
+  fi
+
+  token=$(ssh -o ControlMaster="$ControlMaster" \
+    -o ControlPersist=yes \
+    -S "$ssh_control_path" \
+    "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+    "$TARGET_DIR" "$port" <"$SCRIPT_DIR/connect.sh" ||
+    connection_attempted=1)
 
   # TODO: could we use mosh for the tunnel?
   # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
@@ -144,15 +149,15 @@ else
 
   echo ""
   echo "Opening tunnel to allow browser to connect to jupyter server:"
-  echo "localhost:$port on $(hostname) <-> $JUPYTER_SERVER_ADDRESS:$port"  
-  ssh -S /tmp/jlsession:%h:%p:%r -L $port:localhost:$port -N -f "$JUPYTER_SERVER_ADDRESS"
+  echo "localhost:$port on $(hostname) <-> $JUPYTER_SERVER_ADDRESS:$port"
+  ssh -S "$ssh_control_path" -L "$port":localhost:"$port" -N -f "$JUPYTER_SERVER_ADDRESS"
   # -S: re-use existing ssh connection
   # -L: local port forwarding
   # -f: send to background
   # -N: don't issue any commands on remote server
 fi
 
-jupyterlab_started=1
+connection_attempted=1
 
 if [[ -z "$token" ]] || [[ "$token" == 'null' ]]; then
   error_exit "No token found"
@@ -162,10 +167,10 @@ url="http://localhost:$port/?token=$token"
 
 for tunnel in $tunnels; do
   if [ $SERVER_IS_REMOTE ]; then
-    ssh -S /tmp/jlsession:%h:%p:%r "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-      < "$SCRIPT_DIR/../lib/open-tunnel.sh" "$tunnel"
+    ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+      "$tunnel" <"$SCRIPT_DIR/open-tunnel.sh"
   else
-    sh "$SCRIPT_DIR/../lib/open-tunnel.sh" "$tunnel"
+    sh "$SCRIPT_DIR/open-tunnel.sh" "$tunnel"
   fi
 done
 
