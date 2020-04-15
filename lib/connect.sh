@@ -46,8 +46,15 @@ else
     server_start_cmd="$BASE_SERVER_START_CMD"
   fi
 
+  # NOTE: We need to wait until jupyter is running before trying to get the token.
+  # Previously, we watched for the OUTPUT_FILE to contain a URL.
+  # https://github.com/ariutta/jupyterlab-connect/blob/5c67493f5c6e0920f554176c37e577395c998fa1/jupyterlab-launch#L124
+  # watch -t -g '[[ -f '"$OUTPUT_FILE"' ]] && perl -ne "print if s/(^|.*?[ \"])(http.*?)([\" >].*|$)/\$2/"' "$OUTPUT_FILE"
+  # an alternative way of doing the same thing:
+  # watch -t -g "[[ -f "$OUTPUT_FILE" ]] && grep -E '(^|.*?[ \"])(http.*?)([\" >].*|$)'" "$OUTPUT_FILE"
+
   token=$( (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
-    watch -d -t -g ls -lR "$OUTPUT_FILE" >/dev/null &&
+    watch -t -g 'direnv exec '"$TARGET_DIR"' jupyter notebook list' "$OUTPUT_FILE" >/dev/null &&
     direnv exec "$TARGET_DIR" jupyter notebook list --jsonlist 2>/dev/null |
     jq -r --arg port "$port" 'map(select((.port | tostring) == $port)) | first | .token')
 
