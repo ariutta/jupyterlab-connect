@@ -9,9 +9,9 @@ Connect to a local or remote jupyter lab server, starting it if necessary.
 1. Install dependencies: make, argbash and help2man
 2. Clone and enter this repo
 3. Run `make`
-4. Add the absolute path to the `bin` directory (whatever is output from `echo $(pwd)/bin`) to your `$PATH` env var in your `~/.profile` or `~/.bashrc`:
+4. Add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
    ```
-   export PATH="absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
+   export PATH="escaped-absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
    ```
 
 ### NixOS
