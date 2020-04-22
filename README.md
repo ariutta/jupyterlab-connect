@@ -1,6 +1,6 @@
 # jupyterlab-connect
 
-Connect to a local or remote jupyter lab server, starting it if necessary.
+Connect to a local or remote Jupyter server. If server isn't already running, start it. If server is remote, create an SSH tunnel to make the remote Jupyter server accessible to your browser on your local machine. Optionally, create one or more additional SSH tunnels to connect your Jupyter server to other remote servers, such as database servers.
 
 ## Install
 

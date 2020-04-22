@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # Created by argbash-init v2.8.1
-# ARG_OPTIONAL_SINGLE([port],[p],[Port of jupyter server],[8889])
+# ARG_OPTIONAL_SINGLE([port],[p],[Port of Jupyter server],[8889])
 # ARG_OPTIONAL_BOOLEAN([browser],[],[Open the notebook in a browser after startup.],[on])
-# ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on jupyter server>:<remote server address>:<port on remote server>\n  Tunnel to create, e.g., to connect to a remote database server.\n  Example: 3333:wikipathways-workspace:5432],[])
+# ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on Jupyter server>:<remote server address>:<port on remote server>\n  Create an SSH tunnel. Can be specified multiple times to create multiple tunnels.\n  Example: Make a remote PostgreSQL server accessible to your Jupyter server:\n             -t 3333:database.example.org:5432\n],[])
 # ARG_POSITIONAL_DOUBLEDASH([])
-# ARG_POSITIONAL_SINGLE([target],[When jupyter server is local, target defaults to pwd.\n  When jupyter server is remote, an ssh-style url is required, e.g.:\n   jupyterlab-connect nixos.gladstone.internal:code/jupyterlab-demo],[./])
-# ARG_HELP([Connect to your jupyterlab server])
+# ARG_POSITIONAL_SINGLE([target],[When Jupyter server is local, target defaults to pwd.\n    Example: cd ~/Documents/jupyterlab-demo && jupyterlab-connect\n    Example: jupyterlab-connect ~/Documents/jupyterlab-demo\n  When Jupyter server is remote, an ssh-style url is required.\n    Example: jupyterlab-connect example.org:Documents/jupyterlab-demo\n],[./])
+# ARG_HELP([Connect to your Jupyter server])
 # ARG_VERSION_AUTO([0.0.0])
 # ARGBASH_GO()
 
@@ -23,7 +23,7 @@ cleanup_complete=0
 cleanup() {
   if [[ $connection_attempted -eq 1 ]]; then
     echo "******************************************"
-    cleanup_msg="Disconnecting from jupyter server"
+    cleanup_msg="Disconnecting from Jupyter server"
     if [ "$SERVER_IS_REMOTE" ]; then
       echo "$cleanup_msg (remote)"
     else
@@ -97,7 +97,7 @@ browser="$_arg_browser"
 # ssh doesn't like '~' in the paths
 ssh_safe_target=$(echo "$target" | sed 's/:~/:$HOME/')
 
-# if input has a colon, assume target is referring to a remote jupyter server
+# if input has a colon, assume target is referring to a remote Jupyter server
 if [[ "$ssh_safe_target" == *":"* ]]; then
   SERVER_IS_REMOTE=1
   JUPYTER_SERVER_ADDRESS="${ssh_safe_target%:*}"
@@ -112,10 +112,10 @@ remote_hosts_controlled=()
 
 echo "******************************************"
 if [ $SERVER_IS_REMOTE ]; then
-  echo "Connecting to jupyter server on $JUPYTER_SERVER_ADDRESS (remote)"
+  echo "Connecting to Jupyter server on $JUPYTER_SERVER_ADDRESS (remote)"
   echo "for $ssh_safe_target"
 else
-  echo "Connecting to jupyter server on $(hostname) (local)"
+  echo "Connecting to Jupyter server on $(hostname) (local)"
   echo "for $ssh_safe_target"
 fi
 echo "******************************************"
@@ -148,7 +148,7 @@ else
   remote_hosts_controlled+=("$JUPYTER_SERVER_ADDRESS")
 
   echo ""
-  echo "Opening tunnel to allow browser to connect to jupyter server:"
+  echo "Opening tunnel to allow browser to connect to Jupyter server:"
   echo "localhost:$port on $(hostname) <-> $JUPYTER_SERVER_ADDRESS:$port"
   ssh -S "$ssh_control_path" -L "$port":localhost:"$port" -N -f "$JUPYTER_SERVER_ADDRESS"
   # -S: re-use existing ssh connection
