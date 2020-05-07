@@ -35,17 +35,19 @@ cleanup() {
       if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
         ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
           "$TARGET_DIR" "$port" <"$SCRIPT_DIR/jupyter-notebook-stop.sh"
+
         for tunnel in $tunnels; do
           ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-            "$tunnel" <"$SCRIPT_DIR/close-tunnel.sh"
+            "$tunnel" "$ssh_control_path_expr" <"$SCRIPT_DIR/close-tunnel.sh"
         done
+
         ssh -qS "$ssh_control_path" -O exit "$JUPYTER_SERVER_ADDRESS"
       fi
     else
       sh "$SCRIPT_DIR/jupyter-notebook-stop.sh" "$TARGET_DIR" "$port"
 
       for tunnel in $tunnels; do
-        sh "$SCRIPT_DIR/close-tunnel.sh" "$tunnel"
+        sh "$SCRIPT_DIR/close-tunnel.sh" "$tunnel" "$ssh_control_path_expr"
       done
     fi
 
@@ -84,7 +86,22 @@ error_exit() {
 trap error_exit ERR
 trap cleanup EXIT INT QUIT TERM
 
-ssh_control_path="$HOME/.ssh/.jupyterlab-connect-control-socket:%h:%p:%r"
+# NOTE: we specify ssh_control_path_expr as a single-quoted expression so that
+# we can pass it as an argument to open-tunnel.sh and close-tunnel.sh, even if
+# they are executed on remote machines.
+#
+# If open-tunnel.sh and close-tunnel.sh are executed on a remote machine, we'll
+# have a shared SSH connection on the remote machine and a different shared ssh
+# connection on the local machine.
+#
+# If open-tunnel.sh and close-tunnel.sh are executed on the local machine, we'll
+# re-use the existing shared SSH connection on the local machine.
+ssh_control_path_expr='$HOME/.ssh/.jupyterlab-connect-control-socket:%h:%p:%r'
+ssh_control_path="$(bash -c 'echo '"$ssh_control_path_expr")"
+ssh_control_path_dir="$(dirname "$ssh_control_path")"
+if [ ! -e "$ssh_control_path_dir" ]; then
+  mkdir -p "$ssh_control_path_dir"
+fi
 
 ############################################
 # Make pretty names for args parsed by argbash
@@ -168,9 +185,9 @@ url="http://localhost:$port/?token=$token"
 for tunnel in $tunnels; do
   if [ $SERVER_IS_REMOTE ]; then
     ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-      "$tunnel" <"$SCRIPT_DIR/open-tunnel.sh"
+      "$tunnel" "$ssh_control_path_expr" <"$SCRIPT_DIR/open-tunnel.sh"
   else
-    sh "$SCRIPT_DIR/open-tunnel.sh" "$tunnel"
+    sh "$SCRIPT_DIR/open-tunnel.sh" "$tunnel" "$ssh_control_path_expr"
   fi
 done
 

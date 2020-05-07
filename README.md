@@ -33,3 +33,7 @@ Use [this Nix package expression](https://github.com/ariutta/mynixpkgs/blob/mast
 ```
 jupyterlab-connect --help
 ```
+
+## TODO
+
+Maybe this library would be useful: https://github.com/TimidRobot/cmc

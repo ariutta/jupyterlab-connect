@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 
 tunnel="$1"
+ssh_control_path_expr="$2"
+ssh_control_path="$(bash -c 'echo '"$ssh_control_path_expr")"
+ssh_control_path_dir="$(dirname "$ssh_control_path")"
+if [ ! -e "$ssh_control_path_dir" ]; then
+  mkdir -p "$ssh_control_path_dir"
+fi
 
 jupyter_server_hostname="$(hostname)"
-ssh_control_path="$HOME/.jupyterlab-connect-control-socket:%h:%p:%r"
 
 IFS=':' read -r -a tunnels_array <<<"$tunnel"
 local_port="${tunnels_array[0]}"
