@@ -34,7 +34,7 @@ Use it:
 
 ## Edit Args
 
-Edit template section of `src/start.argbash.sh` as per the (`argbash` API)[https://argbash.readthedocs.io/en/stable/guide.html#argbash-api]. Then re-run `argbash`:
+Edit template section of `src/start.argbash.sh` as per the [`argbash` API](https://argbash.readthedocs.io/en/stable/guide.html#argbash-api). Then re-run `argbash`:
 
 ```
 argbash src/start.argbash.sh -o src/start.argbash.sh
