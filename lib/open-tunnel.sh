@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 
 tunnel="$1"
+ssh_control_path_expr="$2"
+ssh_control_path="$(bash -c 'echo '"$ssh_control_path_expr")"
+ssh_control_path_dir="$(dirname "$ssh_control_path")"
+if [ ! -e "$ssh_control_path_dir" ]; then
+  mkdir -p "$ssh_control_path_dir"
+fi
 
 jupyter_server_hostname="$(hostname)"
 
-IFS=':' read -r -a tunnels_array <<< "$tunnel"
+IFS=':' read -r -a tunnels_array <<<"$tunnel"
 local_port="${tunnels_array[0]}"
 remote_server_address="${tunnels_array[1]}"
 remote_port="${tunnels_array[2]}"
@@ -22,16 +28,14 @@ echo "$jupyter_server_hostname:$local_port on $jupyter_server_hostname <-> $remo
 
 # TODO: if there's a password prompt, the code below won't handle it.
 
-# TODO: We only want to specify ControlMaster=yes the first time, but passing
-# $control_params as a variable as below doesn't work.
-#control_params=""
-#if ! ls -1 /tmp/jlsession":$remote_server_address:"* >/dev/null 2>&1; then
-#  control_params="-o ControlMaster=yes -o ControlPersist=yes"
-#fi
-#ssh "$control_params" -S /tmp/jlsession:%h:%p:%r -L $local_port:localhost:$remote_port -N -f "$remote_server_address"
-
-if ls -1 /tmp/jlsession":$remote_server_address:"* >/dev/null 2>&1; then
-  ssh -S /tmp/jlsession:%h:%p:%r -L $local_port:localhost:$remote_port -N -f "$remote_server_address"
+# We only want to specify ControlMaster=yes the first time.
+if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
+  ControlMaster="no"
 else
-  ssh -o ControlMaster=yes -o ControlPersist=yes -S /tmp/jlsession:%h:%p:%r -L $local_port:localhost:$remote_port -N -f "$remote_server_address"
+  ControlMaster="yes"
 fi
+
+ssh -o ControlMaster="$ControlMaster" -o ControlPersist=yes \
+  -S "$ssh_control_path" \
+  -L "$local_port":localhost:"$remote_port" -N -f \
+  "$remote_server_address"
