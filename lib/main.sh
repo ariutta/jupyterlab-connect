@@ -132,7 +132,7 @@ remote_hosts_controlled=()
 
 if [ $SERVER_IS_REMOTE ]; then
   echo "******************************************" 1>&2
-  echo "Connecting to remote Jupyter server ($JUPYTER_SERVER_ADDRESS)" 1>&2
+  echo "Connecting to remote Jupyter server (on $JUPYTER_SERVER_ADDRESS)" 1>&2
   echo "* root_dir: $TARGET_DIR" 1>&2
   echo "******************************************" 1>&2
 
@@ -160,7 +160,7 @@ if [ $SERVER_IS_REMOTE ]; then
   remote_hosts_controlled+=("$JUPYTER_SERVER_ADDRESS")
 else
   echo "******************************************" 1>&2
-  echo "Connecting to local Jupyter server ($(hostname))" 1>&2
+  echo "Connecting to local Jupyter server (on $(hostname))" 1>&2
   echo "* root_dir: $TARGET_DIR" 1>&2
   echo "******************************************" 1>&2
 
