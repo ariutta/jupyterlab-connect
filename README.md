@@ -4,40 +4,41 @@ Connect to a local or remote Jupyter server. If server isn't already running, st
 
 ## Install
 
-argbash generates `./lib/jupyterlab-connect` from `./lib/main.sh`, so to make changes, edit `./lib/main.sh`, not `./lib/jupyterlab-connect`. The file `./bin/jupyterlab-connect` is a simple wrapper that sends any calls on to `./lib/jupyterlab-connect`.
+If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) installed, you can install `jupyterlab-connect` with [this Nix package expression](https://github.com/ariutta/mynixpkgs/blob/master/jupyterlab-connect/default.nix).
 
-### Nix
-
-If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) installed, you can install jupyterlab-connect using either of the following options:
-
-Nix Option #1
-
-```
-git clone https://github.com/ariutta/jupyterlab-connect.git
-cd jupyterlab-connect
-nix-shell -p pkgs.gnumake -p pkgs.argbash -p help2man --command "make"
-```
-
-Nix Option #2
-
-Use [this Nix package expression](https://github.com/ariutta/mynixpkgs/blob/master/jupyterlab-connect/default.nix).
-
-### From Source
-
-If you don't have Nix installed, you can install `jupyterlab-connect` by building from source:
-
-1. Install dependencies: make, argbash and help2man
-2. Clone and enter this repo
-3. Run `make`
-4. Add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
-   ```
-   export PATH="escaped-absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
-   ```
+If you don't have Nix installed, you currently need to build from source (see Develop below).
 
 ## Usage / Help
 
 ```
 jupyterlab-connect --help
+```
+
+# How to Develop
+
+```
+git clone https://github.com/ariutta/jupyterlab-connect.git
+cd jupyterlab-connect
+```
+
+If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) installed, you can build jupyterlab-connect like this:
+
+```
+nix-shell -p pkgs.gnumake -p pkgs.argbash -p help2man --command "make"
+```
+
+Otherwise, you'll need to install the dependencies make, argbash and help2man before running `make`. You'll also need to add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
+   ```
+   export PATH="escaped-absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
+   ```
+
+Notes:
+* `argbash` generates `./lib/jupyterlab-connect` from `./lib/main.sh`. To make changes to `./lib/jupyterlab-connect`, edit `./lib/main.sh` and rebuild.
+* The file `./bin/jupyterlab-connect` is a simple wrapper that sends any calls on to `./lib/jupyterlab-connect`.
+
+This command can be used to sync a remote and local repo during development and then run it:
+```
+clear; scp -r nixos:Documents/jupyterlab-connect/* ~/jupyterlab-connect/ && jupyterlab-connect --no-browser nixos:Documents/pfocr/analysis20200131
 ```
 
 ## TODO
