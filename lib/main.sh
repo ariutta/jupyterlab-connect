@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# TODO: look at this page regarding ssh tunneling
+# https://unix.stackexchange.com/questions/83806/how-to-kill-ssh-session-that-was-started-with-the-f-option-run-in-background
+
 # Created by argbash-init v2.8.1
 # ARG_OPTIONAL_BOOLEAN([browser],[],[Open the notebook in a browser after startup.],[on])
 # ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on Jupyter server>:<remote server address>:<port on remote server>\n  Create an SSH tunnel. Can be specified multiple times to create multiple tunnels.\n  Example: Make a remote PostgreSQL server accessible to your Jupyter server:\n             -t 3333:database.example.org:5432\n],[])
@@ -33,7 +36,7 @@ cleanup() {
     if [ "$SERVER_IS_REMOTE" ]; then
       if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
         ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-          "$TARGET_DIR" "$jupyter_server_port" <"$SCRIPT_DIR/jupyter-notebook-stop.sh"
+          "$TARGET_DIR" "$jupyter_server_port" <"$SCRIPT_DIR/jupyter-server-stop.sh"
 
         for tunnel in $tunnels; do
           ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
@@ -43,7 +46,7 @@ cleanup() {
         ssh -qS "$ssh_control_path" -O exit "$JUPYTER_SERVER_ADDRESS"
       fi
     else
-      sh "$SCRIPT_DIR/jupyter-notebook-stop.sh" "$TARGET_DIR" "$jupyter_server_port"
+      sh "$SCRIPT_DIR/jupyter-server-stop.sh" "$TARGET_DIR" "$jupyter_server_port"
 
       for tunnel in $tunnels; do
         sh "$SCRIPT_DIR/close-tunnel.sh" "$tunnel" "$ssh_control_path_expr"
@@ -196,7 +199,7 @@ if [ ! -z "$JUPYTER_SERVER_ADDRESS" ]; then
 
   echo "" 1>&2
   echo "Opening tunnel to allow browser to connect to Jupyter server:" 1>&2
-  echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_server_port (localhost is $(hostname))" 1>&2
+  echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_server_port (localhost on $(hostname))" 1>&2
   ssh -S "$ssh_control_path" -L "$localhost_port":localhost:"$jupyter_server_port" -N -f "$JUPYTER_SERVER_ADDRESS"
   # -S: re-use existing ssh connection
   # -L: local port forwarding
