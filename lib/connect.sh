@@ -49,7 +49,7 @@ elif sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
   echo "* connecting to Jupyter server on port $port..." >&2
   echo "$jupyter_connection_details" | jq -r "$jq_output_cmd"
 else
-  BASE_SERVER_START_CMD="jupyter lab --no-browser"
+  BASE_SERVER_START_CMD="jupyter-lab --no-browser"
 
   # Limiting memory available to the process.
   # Doing this will avoid OOM errors that can crash the system.
@@ -58,7 +58,7 @@ else
   jupyterlab_memory_limit="$(echo "($memory_free + $memory_available) / 3" | bc)"
 
   if systemd-run --version >/dev/null 2>&1; then
-    server_start_cmd="systemd-run --user --scope -p MemoryLimit=$jupyterlab_memory_limit'G' $BASE_SERVER_START_CMD"
+    server_start_cmd="systemd-run --user --scope -p MemoryLimit=$jupyterlab_memory_limit\G $BASE_SERVER_START_CMD"
   else
     server_start_cmd="$BASE_SERVER_START_CMD"
   fi
@@ -82,20 +82,8 @@ else
   # Method #2 (preferred): watch for 'jupyter server list' to show jupyter server running.
   #############################################################################
 
-#  echo "try one..." >&2
-#  (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
-#    watch -t -g 'sh -c '"$JUPYTER_BACKEND"' list' "$OUTPUT_FILE" >/dev/null &&
-#    sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
-#    jq -r "first | $jq_output_cmd" >&2
-#
-#  (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
-#    watch -t -g 'direnv exec '"$TARGET_DIR"' jupyter server list' "$OUTPUT_FILE" >/dev/null &&
-#    direnv exec "$TARGET_DIR" jupyter server list --jsonlist 2>/dev/null |
-#    jq -r "first | $jq_output_cmd"
-
   (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
-    watch -t -g 'direnv exec '"$TARGET_DIR"' jupyter notebook list' "$OUTPUT_FILE" >/dev/null &&
-    #watch -t -g sh -c "$JUPYTER_BACKEND"' list' "$OUTPUT_FILE" >/dev/null &&
+    watch -t -g "$JUPYTER_BACKEND list" "$OUTPUT_FILE" >/dev/null &&
     sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
     jq -r "first | $jq_output_cmd"
 
