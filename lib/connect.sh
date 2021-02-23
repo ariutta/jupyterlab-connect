@@ -6,18 +6,34 @@ TARGET_DIR="$(readlink -f "$1")"
 
 jq_output_cmd='.port, .token'
 
-if ! direnv exec "$TARGET_DIR" jupyter server list >/dev/null 2>&1; then
+# TODO: is there a way to avoid repeating this in connect.sh and jupyter-server-stop.sh?
+# Determine whether to use jupyter server, jupyter notebook or something else
+if direnv exec "$TARGET_DIR" jupyter-server --version >/dev/null 2>&1; then
+  JUPYTER_BACKEND="direnv exec "$TARGET_DIR" jupyter-server"
+elif direnv exec "$TARGET_DIR" jupyter-notebook --version >/dev/null 2>&1; then
+  JUPYTER_BACKEND="direnv exec "$TARGET_DIR" jupyter-notebook"
+else
+    echo "Could call neither jupyter-server nor jupyter-notebook" >&2
+    echo "jupyter-server --version:" >&2
+    direnv exec "$TARGET_DIR" jupyter-server --version
+    echo "jupyter-notebook --version:" >&2
+    direnv exec "$TARGET_DIR" jupyter-notebook --version
+    echo "Add a JUPYTER_BACKEND to lib/connect.sh and lib/jupyter-server-stop.sh" >&2
+    exit 1
+fi
+
+if ! sh -c "$JUPYTER_BACKEND"' list' >/dev/null 2>&1; then
   # If we can't run this command, tell the user. Example: direnv not allowed.
   echo "Failed to get list of running servers" 1>&2
   # the following may replicate the error so the user can see it:
-  direnv exec "$TARGET_DIR" jupyter server list 1>&2
-elif direnv exec "$TARGET_DIR" jupyter server list --jsonlist 2>/dev/null |
+  sh -c "$JUPYTER_BACKEND"' list' 1>&2
+elif sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
   jq -e 'length > 0' >/dev/null; then
 
   echo "Jupyter server(s) already running" 1>&2
   echo "* for $TARGET_DIR" 1>&2
 
-  jupyter_connection_details="$(direnv exec "$TARGET_DIR" jupyter server list --jsonlist 2>/dev/null | jq -r 'first')"
+  jupyter_connection_details="$(sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null | jq -r 'first')"
 
   port=$(echo "$jupyter_connection_details" | jq -r '.port')
   root_dir=$(echo "$jupyter_connection_details" | jq -r '.root_dir')
@@ -66,9 +82,21 @@ else
   # Method #2 (preferred): watch for 'jupyter server list' to show jupyter server running.
   #############################################################################
 
+#  echo "try one..." >&2
+#  (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
+#    watch -t -g 'sh -c '"$JUPYTER_BACKEND"' list' "$OUTPUT_FILE" >/dev/null &&
+#    sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
+#    jq -r "first | $jq_output_cmd" >&2
+#
+#  (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
+#    watch -t -g 'direnv exec '"$TARGET_DIR"' jupyter server list' "$OUTPUT_FILE" >/dev/null &&
+#    direnv exec "$TARGET_DIR" jupyter server list --jsonlist 2>/dev/null |
+#    jq -r "first | $jq_output_cmd"
+
   (nohup direnv exec "$TARGET_DIR" sh -c "$server_start_cmd" >"$OUTPUT_FILE" 2>&1 &) &&
-    watch -t -g 'direnv exec '"$TARGET_DIR"' jupyter server list' "$OUTPUT_FILE" >/dev/null &&
-    direnv exec "$TARGET_DIR" jupyter server list --jsonlist 2>/dev/null |
+    watch -t -g 'direnv exec '"$TARGET_DIR"' jupyter notebook list' "$OUTPUT_FILE" >/dev/null &&
+    #watch -t -g sh -c "$JUPYTER_BACKEND"' list' "$OUTPUT_FILE" >/dev/null &&
+    sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
     jq -r "first | $jq_output_cmd"
 
   # TODO: if the server ever finishes starting before the watch starts, the

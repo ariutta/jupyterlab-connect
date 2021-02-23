@@ -175,6 +175,8 @@ else
   fi
 fi
 
+echo "jupyter_connection_details: $jupyter_connection_details" >&2
+
 connection_attempted=1
 
 if [ -z "$jupyter_connection_details" ] || [ "$jupyter_connection_details" == 'null' ]; then
