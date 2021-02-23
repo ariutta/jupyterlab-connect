@@ -24,14 +24,14 @@ cleanup_complete=0
 
 cleanup() {
   if [[ $connection_attempted -eq 1 ]]; then
-    echo "******************************************" 1>&2
+    echo "******************************************" >&2
     cleanup_msg="Disconnecting from Jupyter server"
     if [ "$SERVER_IS_REMOTE" ]; then
-      echo "$cleanup_msg (remote)" 1>&2
+      echo "$cleanup_msg (remote)" >&2
     else
-      echo "$cleanup_msg (local)" 1>&2
+      echo "$cleanup_msg (local)" >&2
     fi
-    echo "******************************************" 1>&2
+    echo "******************************************" >&2
 
     if [ "$SERVER_IS_REMOTE" ]; then
       if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
@@ -53,7 +53,7 @@ cleanup() {
       done
     fi
 
-    echo "$PROGNAME: goodbye" 1>&2
+    echo "$PROGNAME: goodbye" >&2
   fi
 
   cleanup_complete=1
@@ -67,14 +67,14 @@ error_exit() {
   #	----------------------------------------------------------------
 
   read -r line file <<<"$(caller)"
-  echo "" 1>&2
-  echo "ERROR: file $file, line $line" 1>&2
+  echo "" >&2
+  echo "ERROR: file $file, line $line" >&2
   if [ ! "$1" ]; then
-    sed "${line}q;d" "$file" 1>&2
+    sed "${line}q;d" "$file" >&2
   else
-    echo "${1:-"Unknown Error"}" 1>&2
+    echo "${1:-"Unknown Error"}" >&2
   fi
-  echo "" 1>&2
+  echo "" >&2
 
   # TODO: should error_exit call cleanup?
   #       The EXIT trap already calls cleanup, so
@@ -134,10 +134,10 @@ jupyter_connection_details=""
 remote_hosts_controlled=()
 
 if [ $SERVER_IS_REMOTE ]; then
-  echo "******************************************" 1>&2
-  echo "Connecting to remote Jupyter server (on $JUPYTER_SERVER_ADDRESS)" 1>&2
-  echo "* root_dir: $TARGET_DIR" 1>&2
-  echo "******************************************" 1>&2
+  echo "******************************************" >&2
+  echo "Connecting to remote Jupyter server (on $JUPYTER_SERVER_ADDRESS)" >&2
+  echo "* root_dir: $TARGET_DIR" >&2
+  echo "******************************************" >&2
 
   # We only want to specify ControlMaster=yes the first time.
   if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
@@ -162,10 +162,10 @@ if [ $SERVER_IS_REMOTE ]; then
 
   remote_hosts_controlled+=("$JUPYTER_SERVER_ADDRESS")
 else
-  echo "******************************************" 1>&2
-  echo "Connecting to local Jupyter server (on $(hostname))" 1>&2
-  echo "* root_dir: $TARGET_DIR" 1>&2
-  echo "******************************************" 1>&2
+  echo "******************************************" >&2
+  echo "Connecting to local Jupyter server (on $(hostname))" >&2
+  echo "* root_dir: $TARGET_DIR" >&2
+  echo "******************************************" >&2
 
   if direnv exec "$TARGET_DIR" jupyter-lab --version >/dev/null 2>&1; then
     jupyter_connection_details=$(bash "$SCRIPT_DIR/connect.sh" "$TARGET_DIR")
@@ -199,16 +199,16 @@ if [ ! -z "$JUPYTER_SERVER_ADDRESS" ]; then
   # TODO: could we use mosh for the tunnel?
   # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
 
-  echo "" 1>&2
-  echo "Opening tunnel to allow browser to connect to Jupyter server:" 1>&2
-  echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_server_port (localhost on $(hostname))" 1>&2
+  echo "" >&2
+  echo "Opening tunnel to allow browser to connect to Jupyter server:" >&2
+  echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_server_port (localhost on $(hostname))" >&2
   ssh -S "$ssh_control_path" -L "$localhost_port":localhost:"$jupyter_server_port" -N -f "$JUPYTER_SERVER_ADDRESS"
   # -S: re-use existing ssh connection
   # -L: local port forwarding
   # -f: send to background
   # -N: don't issue any commands on remote server
 
-  echo "  Success! Tunnel created." 1>&2
+  echo "  Success! Tunnel created." >&2
 fi
 
 url="http://localhost:$localhost_port/?token=$token"
@@ -222,7 +222,7 @@ for tunnel in $tunnels; do
   fi
 done
 
-echo "" 1>&2
+echo "" >&2
 to_view_msg="To view the notebook, visit:\n   $url"
 if [ "$browser" == 'on' ]; then
   if xdg-open --version >/dev/null 2>&1; then

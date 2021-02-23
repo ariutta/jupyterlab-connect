@@ -24,14 +24,14 @@ fi
 
 if ! sh -c "$JUPYTER_BACKEND"' list' >/dev/null 2>&1; then
   # If we can't run this command, tell the user. Example: direnv not allowed.
-  echo "Failed to get list of running servers" 1>&2
+  echo "Failed to get list of running servers" >&2
   # the following may replicate the error so the user can see it:
-  sh -c "$JUPYTER_BACKEND"' list' 1>&2
+  sh -c "$JUPYTER_BACKEND"' list' >&2
 elif sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
   jq -e 'length > 0' >/dev/null; then
 
-  echo "Jupyter server(s) already running" 1>&2
-  echo "* for $TARGET_DIR" 1>&2
+  echo "Jupyter server(s) already running" >&2
+  echo "* for $TARGET_DIR" >&2
 
   jupyter_connection_details="$(sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null | jq -r 'first')"
 
@@ -42,11 +42,11 @@ elif sh -c "$JUPYTER_BACKEND"' list --jsonlist' 2>/dev/null |
   normalized_target_dir="$(readlink -f "$TARGET_DIR")"
 
   if [[ "$normalized_root_dir" != "$normalized_target_dir" ]]; then
-    echo "Normalized root_dir must match normalized TARGET_DIR, but '$normalized_root_dir' != '$normalized_target_dir'" 1>&2
+    echo "Normalized root_dir must match normalized TARGET_DIR, but '$normalized_root_dir' != '$normalized_target_dir'" >&2
     exit 1
   fi
 
-  echo "* connecting to Jupyter server on port $port..." 1>&2
+  echo "* connecting to Jupyter server on port $port..." >&2
   echo "$jupyter_connection_details" | jq -r "$jq_output_cmd"
 else
   BASE_SERVER_START_CMD="jupyter lab --no-browser"
