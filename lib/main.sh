@@ -1,7 +1,24 @@
 #!/usr/bin/env bash
 
-# TODO: look at this page regarding ssh tunneling
+#############################
+# TODO: look into ssh options
+#############################
+#
+# Look at this page regarding ssh tunneling:
 # https://unix.stackexchange.com/questions/83806/how-to-kill-ssh-session-that-was-started-with-the-f-option-run-in-background
+#
+# Can we have the tunnel automatically disconnect?
+# https://unix.stackexchange.com/a/83812
+#
+# How about running a service for the master connection?
+# Create a simple daemontools service that runs 'ssh -MNn user@server'.
+# This will be a dedicated master connection that will always be available
+# (and you won’t have to worry about master logout hangs)
+# https://www.anchor.com.au/blog/2010/02/ssh-controlmaster-the-good-the-bad-the-ugly/
+#
+# Could we use mosh for the tunnel?
+# related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
+
 
 # Created by argbash-init v2.8.1
 # ARG_OPTIONAL_BOOLEAN([browser],[],[Open the notebook in a browser after startup.],[on])
@@ -196,9 +213,6 @@ token=${jupyter_connection_details_arr[1]}
 localhost_port=$(get_free_port)
 
 if [ ! -z "$JUPYTER_SERVER_ADDRESS" ]; then
-  # TODO: could we use mosh for the tunnel?
-  # related: https://github.com/mobile-shell/mosh/issues/24#issuecomment-303151487
-
   echo "" >&2
   echo "Opening tunnel to allow browser to connect to Jupyter server:" >&2
   echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_server_port (localhost on $(hostname))" >&2
