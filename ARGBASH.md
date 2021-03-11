@@ -1,6 +1,7 @@
 # Using argbash
 
-Add CLI arg handling to an existing script named `src/start.sh`.
+Here's how to add CLI argument handling to an existing script named `src/start.sh`.
+Note: this may not be how I'm currently using argbash for lib/main.sh
 
 ## First Time
 
