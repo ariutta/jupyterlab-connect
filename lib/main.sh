@@ -25,6 +25,7 @@
 # ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on Jupyter server>:<remote server address>:<port on remote server>\n  Create an SSH tunnel. Can be specified multiple times to create multiple tunnels.\n  Example: Make a remote PostgreSQL server accessible to your Jupyter server:\n             -t 3333:database.example.org:5432\n],[])
 # ARG_POSITIONAL_DOUBLEDASH([])
 # ARG_POSITIONAL_SINGLE([target],[When Jupyter server is local, target defaults to pwd.\n    Example: cd ~/Documents/jupyterlab-demo && jupyterlab-connect\n    Example: jupyterlab-connect ~/Documents/jupyterlab-demo\n  When Jupyter server is remote, an ssh-style url is required.\n    Example: jupyterlab-connect example.org:Documents/jupyterlab-demo\n],[./])
+# ARG_OPTIONAL_SINGLE([port], [p], [SSH port for connecting to target (the remote host).], [22])
 # ARG_HELP([Connect to your Jupyter server])
 # ARG_VERSION_AUTO([0.0.0])
 # ARGBASH_GO()
@@ -51,19 +52,19 @@ cleanup() {
     echo "******************************************" >&2
 
     if [ "$SERVER_IS_REMOTE" ]; then
-      if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
-        ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
-          "$TARGET_DIR" "$jupyter_server_port" <"$SCRIPT_DIR/jupyter-server-stop.sh"
+      if ssh -p "$jupyter_ssh_server_port" -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
+        ssh -p "$jupyter_ssh_server_port" -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+          "$TARGET_DIR" "$jupyter_web_server_port" <"$SCRIPT_DIR/jupyter-server-stop.sh"
 
         for tunnel in $tunnels; do
-          ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+          ssh -p "$jupyter_ssh_server_port" -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
             "$tunnel" "$ssh_control_path_expr" <"$SCRIPT_DIR/close-tunnel.sh"
         done
 
-        ssh -qS "$ssh_control_path" -O exit "$JUPYTER_SERVER_ADDRESS"
+        ssh -p "$jupyter_ssh_server_port" -qS "$ssh_control_path" -O exit "$JUPYTER_SERVER_ADDRESS"
       fi
     else
-      sh "$SCRIPT_DIR/jupyter-server-stop.sh" "$TARGET_DIR" "$jupyter_server_port"
+      sh "$SCRIPT_DIR/jupyter-server-stop.sh" "$TARGET_DIR" "$jupyter_web_server_port"
 
       for tunnel in $tunnels; do
         sh "$SCRIPT_DIR/close-tunnel.sh" "$tunnel" "$ssh_control_path_expr"
@@ -125,6 +126,7 @@ fi
 ############################################
 # Make pretty names for args parsed by argbash
 target="$_arg_target"
+jupyter_ssh_server_port="$_arg_port"
 tunnels="$_arg_tunnel"
 browser="$_arg_browser"
 ############################################
@@ -157,20 +159,20 @@ if [ $SERVER_IS_REMOTE ]; then
   echo "******************************************" >&2
 
   # We only want to specify ControlMaster=yes the first time.
-  if ssh -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
+  if ssh -p "$jupyter_ssh_server_port" -qS "$ssh_control_path" -O check "$JUPYTER_SERVER_ADDRESS" 2>/dev/null; then
     ControlMaster="no"
   else
     ControlMaster="yes"
   fi
 
-  jupyter_connection_details=$(ssh -o ControlMaster="$ControlMaster" \
+  jupyter_connection_details=$(ssh -p "$jupyter_ssh_server_port" -o ControlMaster="$ControlMaster" \
     -o ControlPersist=yes \
     -S "$ssh_control_path" \
     "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
     "$TARGET_DIR" <"$SCRIPT_DIR/connect.sh")
 
   # TODO: should we use '|| connection_attempted=1'?
-#  jupyter_connection_details=$(ssh -o ControlMaster="$ControlMaster" \
+#  jupyter_connection_details=$(ssh -p "$jupyter_ssh_server_port" -o ControlMaster="$ControlMaster" \
 #    -o ControlPersist=yes \
 #    -S "$ssh_control_path" \
 #    "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
@@ -207,7 +209,7 @@ do
   jupyter_connection_details_arr+=("$value")
 done
 
-jupyter_server_port=${jupyter_connection_details_arr[0]}
+jupyter_web_server_port=${jupyter_connection_details_arr[0]}
 token=${jupyter_connection_details_arr[1]}
 
 localhost_port=$(get_free_port)
@@ -215,8 +217,8 @@ localhost_port=$(get_free_port)
 if [ ! -z "$JUPYTER_SERVER_ADDRESS" ]; then
   echo "" >&2
   echo "Opening tunnel to allow browser to connect to Jupyter server:" >&2
-  echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_server_port (localhost on $(hostname))" >&2
-  ssh -S "$ssh_control_path" -L "$localhost_port":localhost:"$jupyter_server_port" -N -f "$JUPYTER_SERVER_ADDRESS"
+  echo "  localhost:$localhost_port <-> $JUPYTER_SERVER_ADDRESS:$jupyter_web_server_port (localhost on $(hostname))" >&2
+  ssh -p "$jupyter_ssh_server_port" -S "$ssh_control_path" -L "$localhost_port":localhost:"$jupyter_web_server_port" -N -f "$JUPYTER_SERVER_ADDRESS"
   # -S: re-use existing ssh connection
   # -L: local port forwarding
   # -f: send to background
@@ -229,7 +231,7 @@ url="http://localhost:$localhost_port/?token=$token"
 
 for tunnel in $tunnels; do
   if [ $SERVER_IS_REMOTE ]; then
-    ssh -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
+    ssh -p "$jupyter_ssh_server_port" -S "$ssh_control_path" "$JUPYTER_SERVER_ADDRESS" 'bash -s' -- \
       "$tunnel" "$ssh_control_path_expr" <"$SCRIPT_DIR/open-tunnel.sh"
   else
     sh "$SCRIPT_DIR/open-tunnel.sh" "$tunnel" "$ssh_control_path_expr"
