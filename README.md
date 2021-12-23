@@ -50,3 +50,4 @@ clear; scp -r nixos:Documents/jupyterlab-connect/* ~/jupyterlab-connect/ && jupy
 
 - Maybe this library would be useful: https://github.com/TimidRobot/cmc
 - Figure out an easy option to reconnect when SSH session dies.
+- For macOS, look at using `caffeinate -i -s /usr/bin/ssh` to control sleep & disconnects.
