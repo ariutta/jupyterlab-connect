@@ -21,7 +21,7 @@ git clone https://github.com/ariutta/jupyterlab-connect.git
 cd jupyterlab-connect
 ```
 
-If you're using the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) and direnv, just enter this directory and run `make`./
+If you're using the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) and direnv, just enter this directory and run `make`.
 
 If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) installed but not direnv, run this:
 
@@ -37,13 +37,13 @@ export PATH="escaped-absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
 
 Notes:
 
-- `argbash` generates `./lib/jupyterlab-connect` from `./lib/main.sh`. To make changes to `./lib/jupyterlab-connect`, edit `./lib/main.sh` and rebuild.
+- `argbash` generates `./lib/jupyterlab-connect` from `./lib/main.sh`. To make changes to `./lib/jupyterlab-connect`, edit `./lib/main.sh` and rebuild. (For reference, [here](https://github.com/ariutta/jupyterlab-connect/blob/b8c711c005f9e2ae2752312350a39c699f9679ae/ARGBASH.md) is the old ARGBASH.md file.)
 - The file `./bin/jupyterlab-connect` is a simple wrapper that sends any calls on to `./lib/jupyterlab-connect`.
 
 This command can be used to sync a remote and local repo during development and then run it:
 
 ```
-clear; scp -r nixos:Documents/jupyterlab-connect/* ~/jupyterlab-connect/ && jupyterlab-connect --no-browser nixos:Documents/pfocr/analysis20200131
+clear; scp -r nixos:Documents/jupyterlab-connect/* ~/jupyterlab-connect/ && jupyterlab-connect --no-browser nixos:Documents/pathway-figure-ocr/notebooks
 ```
 
 ## TODO

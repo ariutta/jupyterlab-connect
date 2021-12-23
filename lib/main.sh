@@ -21,11 +21,11 @@
 
 
 # Created by argbash-init v2.8.1
+# ARG_OPTIONAL_SINGLE([port], [p], [SSH port for target (only used if Jupyter server is remote).], [22])
 # ARG_OPTIONAL_BOOLEAN([browser],[],[Open the notebook in a browser after startup.],[on])
-# ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on Jupyter server>:<remote server address>:<port on remote server>\n  Create an SSH tunnel. Can be specified multiple times to create multiple tunnels.\n  Example: Make a remote PostgreSQL server accessible to your Jupyter server:\n             -t 3333:database.example.org:5432\n],[])
+# ARG_OPTIONAL_REPEATED([tunnel],[t],[<port on Jupyter server>:<remote server address>:<port on remote server>\n  Create an SSH tunnel. Can be specified multiple times to create multiple tunnels.\n  Example: Make a remote PostgreSQL server accessible to your Jupyter server:\n             -t 3333:database.example.org:5432],[])
 # ARG_POSITIONAL_DOUBLEDASH([])
-# ARG_POSITIONAL_SINGLE([target],[When Jupyter server is local, target defaults to pwd.\n    Example: cd ~/Documents/jupyterlab-demo && jupyterlab-connect\n    Example: jupyterlab-connect ~/Documents/jupyterlab-demo\n  When Jupyter server is remote, an ssh-style url is required.\n    Example: jupyterlab-connect example.org:Documents/jupyterlab-demo\n],[./])
-# ARG_OPTIONAL_SINGLE([port], [p], [SSH port for connecting to target (the remote host).], [22])
+# ARG_POSITIONAL_SINGLE([target],[When Jupyter server is local, target defaults to pwd.\n    Example: cd ~/Documents/jupyterlab-demo && jupyterlab-connect\n    Example: jupyterlab-connect ~/Documents/jupyterlab-demo\n  When Jupyter server is remote, an ssh-style url is required.\n    Example: jupyterlab-connect example.org:Documents/jupyterlab-demo],[./])
 # ARG_HELP([Connect to your Jupyter server])
 # ARG_VERSION_AUTO([0.0.0])
 # ARGBASH_GO()
