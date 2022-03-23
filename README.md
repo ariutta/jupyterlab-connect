@@ -6,7 +6,7 @@ Connect to a local or remote Jupyter server. If server isn't already running, st
 
 If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) installed, you can install `jupyterlab-connect` with [this Nix package expression](https://github.com/ariutta/mynixpkgs/blob/master/jupyterlab-connect/default.nix).
 
-If you don't have Nix installed, you currently need to build from source (see Develop below).
+If you don't have Nix installed, you currently need to build from source (see "How to Build" below).
 
 ## Usage / Help
 
@@ -21,7 +21,7 @@ git clone https://github.com/ariutta/jupyterlab-connect.git
 cd jupyterlab-connect
 ```
 
-If you're using the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) and direnv, just enter this directory and run `make`.
+If you're using the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) and [direnv](https://direnv.net/), just enter this directory and run `make`.
 
 If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you-should-give-it-a-try.html) installed but not direnv, run this:
 
@@ -29,7 +29,7 @@ If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you
 nix-shell -p pkgs.gnumake -p pkgs.argbash -p help2man --command "make"
 ```
 
-Otherwise, you'll need to install the dependencies make, argbash and help2man before running `make`. You'll also need to add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
+Otherwise, you'll need to install the dependencies [make](https://www.gnu.org/software/make/), [argbash](https://argbash.io/) and [help2man](https://www.gnu.org/software/help2man/) before running `make`. You'll also need to add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
 
 ```
 export PATH="escaped-absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
