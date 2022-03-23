@@ -29,7 +29,7 @@ If you have the [Nix package manager](https://nixos.org/guides/nix-pills/why-you
 nix-shell -p pkgs.gnumake -p pkgs.argbash -p help2man --command "make"
 ```
 
-Otherwise, you'll need to install the dependencies [make](https://www.gnu.org/software/make/), [argbash](https://argbash.io/) and [help2man](https://www.gnu.org/software/help2man/) before running `make`. You'll also need to add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
+Otherwise, you'll need to install the dependencies [make](https://www.gnu.org/software/make/), [argbash](https://argbash.io/), [help2man](https://www.gnu.org/software/help2man/) and [jq](https://stedolan.github.io/jq/) before running `make`. You'll also need to add the absolute path to the `bin` directory (whatever is output from `echo "$(pwd)/bin"`) to your `$PATH` environment variable in your `~/.profile`, `~/.bash_profile` or `~/.bashrc`:
 
 ```
 export PATH="escaped-absolute-path-on-your-machine/jupyterlab-connect/bin:$PATH"
